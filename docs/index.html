@@ -1,0 +1,491 @@
+<title>Aware — Spark: the AI that's in the room</title>
+<style>
+  /* One committed world: the room at night where Spark listens.
+     Deep warm black, ember accent — a spark, not a neon. */
+  :root, :root[data-theme="dark"], :root[data-theme="light"] {
+    --bg: #16120f;
+    --bg2: #1e1915;
+    --panel: #211b16;
+    --ink: #ede4d8;
+    --dim: #a2937f;
+    --faint: #6e6254;
+    --ember: #ffb454;
+    --coal: #ff6b35;
+    --cold: #7f93a8;
+    --line: rgba(237, 228, 216, 0.13);
+    --good: #9ec97f;
+    color-scheme: dark;
+  }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Charter, Georgia, 'Iowan Old Style', serif;
+    font-size: 18px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .sans { font-family: 'Avenir Next', Avenir, Futura, 'Helvetica Neue', sans-serif; }
+  .mono { font-family: 'SF Mono', ui-monospace, Menlo, monospace; }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 24px; }
+  .wide { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- hero ---------- */
+  header { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+  #wave { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hero-inner { position: relative; padding: 96px 24px 72px; max-width: 960px; margin: 0 auto; }
+  .overline {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--dim); margin: 0 0 28px;
+  }
+  .overline b { color: var(--ember); font-weight: 600; }
+  h1 {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-weight: 700;
+    font-size: clamp(44px, 8.5vw, 92px);
+    line-height: 0.98;
+    letter-spacing: -0.015em;
+    margin: 0 0 30px;
+    text-wrap: balance;
+  }
+  h1 .them { color: var(--cold); }
+  h1 .you { color: var(--ember); }
+  .hero-sub {
+    font-size: clamp(19px, 2.4vw, 23px);
+    max-width: 34em; color: var(--ink); margin: 0 0 12px;
+  }
+  .hero-sub em { color: var(--ember); font-style: italic; }
+  .hero-credit { color: var(--faint); font-size: 15px; margin: 24px 0 0; }
+  .hero-credit .mono { font-size: 13px; color: var(--dim); }
+
+  /* ---------- section chrome ---------- */
+  section { padding: 72px 0; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--ember); margin: 0 0 14px;
+  }
+  h2 {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-weight: 700; font-size: clamp(28px, 4.5vw, 44px);
+    line-height: 1.08; letter-spacing: -0.01em;
+    margin: 0 0 22px; text-wrap: balance;
+  }
+  p { margin: 0 0 18px; max-width: 36em; }
+  .dim { color: var(--dim); }
+
+  /* ---------- live night demo ---------- */
+  .console {
+    background: #0f0c09;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px 22px 18px;
+    font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+    font-size: 14px; line-height: 1.9;
+    overflow-x: auto;
+    box-shadow: 0 30px 80px rgba(0,0,0,.45);
+  }
+  .console .t { color: var(--faint); }
+  .console .src { color: var(--cold); }
+  .console .line { opacity: 0; transform: translateY(4px); transition: opacity .5s, transform .5s; }
+  .console .line.on { opacity: 1; transform: none; }
+  .notif {
+    margin-top: 14px;
+    display: flex; gap: 12px; align-items: flex-start;
+    background: linear-gradient(180deg, #2a2118, #241c14);
+    border: 1px solid rgba(255,180,84,.35);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-size: 15px; line-height: 1.45;
+    opacity: 0; transform: translateY(6px);
+    transition: opacity .6s, transform .6s;
+  }
+  .notif.on { opacity: 1; transform: none; }
+  .notif .zap { font-size: 20px; line-height: 1.2; }
+  .notif b { display: block; color: var(--ember); font-weight: 600; margin-bottom: 2px; }
+  .caption { color: var(--faint); font-size: 14px; margin-top: 16px; }
+
+  /* ---------- morning brief ---------- */
+  .brief {
+    background: linear-gradient(180deg, #251d14, #1e1813);
+    border: 1px solid rgba(255,180,84,.28);
+    border-radius: 14px;
+    padding: 30px 32px;
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-size: 16.5px; line-height: 1.6;
+    box-shadow: 0 30px 80px rgba(0,0,0,.4);
+  }
+  .brief .from { display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+    font-size: 13px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--ember); }
+  .brief ol { margin: 0; padding-left: 22px; display: grid; gap: 14px; }
+  .brief li::marker { color: var(--ember); font-weight: 700; }
+  .brief b { color: var(--ember); font-weight: 600; }
+  .brief .ps { margin: 20px 0 0; color: var(--dim); font-size: 15px; }
+
+  /* ---------- anatomy ---------- */
+  .organs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 34px; }
+  .organ {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 20px 16px;
+  }
+  .organ h3 {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--ember); margin: 0 0 8px;
+  }
+  .organ h3 .k { color: var(--faint); font-weight: 500; letter-spacing: 0; text-transform: none; }
+  .organ p { font-size: 15.5px; color: var(--ink); margin: 0 0 10px; }
+  .organ .mono { font-size: 12.5px; color: var(--dim); }
+  .organ.spark { border-color: rgba(255,180,84,.4); background: linear-gradient(180deg, #261e15, #211b16); }
+
+  /* ---------- loop ---------- */
+  .loop { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 26px; margin: 34px 0; }
+  .loop h3 {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-size: 17px; font-weight: 600; margin: 0 0 8px; color: var(--ink);
+  }
+  .loop p { font-size: 15.5px; color: var(--dim); margin: 0; }
+  .playbook {
+    border-left: 2px solid var(--ember);
+    background: var(--panel);
+    border-radius: 0 10px 10px 0;
+    padding: 16px 20px;
+    font-size: 13px; line-height: 1.8;
+    overflow-x: auto;
+  }
+  .playbook .hl { color: var(--ember); }
+  .approve { color: var(--good); }
+
+  /* ---------- receipts ---------- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin: 34px 0 8px; }
+  .stat { border-top: 2px solid var(--ember); padding-top: 12px; }
+  .stat .n {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -0.02em;
+  }
+  .stat .l { color: var(--dim); font-size: 14.5px; margin-top: 6px; line-height: 1.4; }
+
+  /* ---------- byob ---------- */
+  .brains { display: flex; flex-wrap: wrap; gap: 10px; margin: 26px 0 8px; }
+  .brain {
+    font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+    font-size: 13.5px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 16px;
+    color: var(--ink);
+  }
+  .brain.lit { border-color: rgba(255,180,84,.5); color: var(--ember); }
+
+  /* ---------- taglines ---------- */
+  .taglines { list-style: none; margin: 30px 0 0; padding: 0; }
+  .taglines li {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-weight: 700;
+    font-size: clamp(24px, 4vw, 38px);
+    line-height: 1.15;
+    padding: 18px 0;
+    border-top: 1px solid var(--line);
+    letter-spacing: -0.01em;
+  }
+  .taglines li:last-child { border-bottom: 1px solid var(--line); }
+  .taglines .alt { color: var(--faint); }
+
+  /* ---------- roadmap ---------- */
+  .road { margin: 26px 0 0; padding: 0; list-style: none; }
+  .road li { display: flex; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 16px; }
+  .road .tag {
+    font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+    font-size: 12px; color: var(--ember); white-space: nowrap; padding-top: 4px; min-width: 78px;
+  }
+  .road .what { color: var(--ink); }
+  .road .what span { color: var(--dim); }
+
+  footer { padding: 84px 24px 100px; text-align: center; }
+  .say {
+    font-family: 'Avenir Next', Avenir, Futura, sans-serif;
+    font-weight: 700; font-size: clamp(34px, 6vw, 60px); letter-spacing: -0.015em;
+    margin: 0 0 16px;
+  }
+  .say .q { color: var(--ember); }
+  footer p { margin: 0 auto; color: var(--dim); max-width: 32em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .console .line, .notif { transition: none; }
+  }
+</style>
+
+<header>
+  <canvas id="wave" aria-hidden="true"></canvas>
+  <div class="hero-inner">
+    <p class="overline">Open source · Local-first · <b>⚡ Aware</b> · Built for macOS</p>
+    <h1><span class="them">They spy on you<br>and keep the benefit.</span><br>
+        <span class="you">Spy on yourself.<br>Keep it all.</span></h1>
+    <p class="hero-sub sans">Aware gives an AI real-time senses — ears, eyes, memory — on your own
+      Mac. Audio becomes text locally and is deleted in seconds. What wakes up inside is
+      <em>Spark</em>: an intelligence that knows what's happening while it's happening, and works
+      for no one but you.</p>
+    <p class="hero-credit sans">Aware is the body. Spark is the mind.
+      <span class="mono">&nbsp;·&nbsp; 0 dependencies · your mic · your machine · your rules</span></p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">One night, for real</p>
+    <h2>The moment that sells it in six seconds</h2>
+    <p class="dim">This is Aware's actual behavior — the demo clip that markets itself. An interview
+      wraps. Nobody touches a keyboard.</p>
+  </div>
+  <div class="wide" style="margin-top: 30px;">
+    <div class="console" id="demo">
+      <div class="line"><span class="t">[16:58:41]</span> <span class="src">system:</span> …this was great, thank you so much for your time.</div>
+      <div class="line"><span class="t">[16:58:52]</span> <span class="src">mic:</span> Perfect — that's a wrap. I'm stopping the recording now.</div>
+      <div class="line"><span class="t">[16:59:20]</span> <span class="src">eyes:</span> switched to: Finder</div>
+      <div class="line"><span class="t">[17:00:04]</span> <span class="src">spark:</span> wake — interview-wrap playbook matched</div>
+      <div class="notif" id="notif">
+        <div class="zap">⚡</div>
+        <div><b>Spark</b>Your 4 o'clock just wrapped — I'll watch for the Zoom recording and flag it the moment it lands.</div>
+      </div>
+    </div>
+    <p class="caption wrap" style="padding: 0;">Real pipeline: ffmpeg → whisper.cpp (on-device) → rolling transcript → Spark wakes → macOS notification. The audio was already deleted before the notification appeared.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">The morning after</p>
+    <h2>It doesn't just react.<br>It compounds.</h2>
+    <p class="dim">Real-time is the trick; memory is the magic. Days of awareness add up to
+      briefings like this — written before you asked.</p>
+    <div class="brief" style="margin-top: 30px;">
+      <div class="from"><span>⚡</span><span>Spark · Thursday, 7:40 AM</span></div>
+      <ol>
+        <li>I heard you and Katy talking yesterday — her birthday's coming up. You mentioned
+          the <b>pottery class</b> idea; knowing her taste, I pulled four options worth a look,
+          two under $100. She also said she wants a <b>robot to help clean</b> — tell me a
+          little about her space and I'll narrow the list to a real recommendation.</li>
+        <li>That call with the <b>production company</b> — I did a deep dive afterward and
+          started a file for future reference: their recent shows, who runs current, what
+          they're likely staffing next quarter.</li>
+        <li>Your inbox is organized and referenceable — ask me about any thread. Better:
+          I flagged <b>two conversations worth reviving</b>, including a former client whose
+          new project was just announced. Want intros drafted?</li>
+      </ol>
+      <p class="ps">Nothing above required a prompt. It required permission — which you gave,
+        and can read, and can revoke.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Anatomy</p>
+    <h2>Five organs, one awareness</h2>
+  </div>
+  <div class="wide">
+    <div class="organs">
+      <div class="organ">
+        <h3>Ears <span class="k">· always listening, never keeping</span></h3>
+        <p>Every audio source — your mic, the other side of the call — transcribed on-device in 30-second breaths.</p>
+        <p class="mono">ffmpeg → whisper.cpp · audio deleted after transcription</p>
+      </div>
+      <div class="organ">
+        <h3>Eyes <span class="k">· knows what you're working on</span></h3>
+        <p>Which app, when, for how long. "Tim's been deep in Premiere for 40 minutes" is context, not surveillance — because it's yours.</p>
+        <p class="mono">frontmost-app log · window titles &amp; screen next</p>
+      </div>
+      <div class="organ">
+        <h3>Memory <span class="k">· plain markdown, fully auditable</span></h3>
+        <p>What Spark notices, it writes down. What repeats, it learns. You can read every line it remembers — or delete it.</p>
+        <p class="mono">memory/observations.md · REMEMBER: protocol</p>
+      </div>
+      <div class="organ spark">
+        <h3>Spark <span class="k">· the mind</span></h3>
+        <p>Wakes on a heartbeat, or instantly when you say <b>"hey spark."</b> Reads the room, the screen, its memory — then decides. Usually: silence. Sometimes: exactly the right tap on the shoulder.</p>
+        <p class="mono">any AI, one config line · values in an editable text file</p>
+      </div>
+      <div class="organ">
+        <h3>Hands <span class="k">· playbooks</span></h3>
+        <p>Markdown automations: wrap an interview → find the recording. End a meeting → notes and action items, already written.</p>
+        <p class="mono">playbooks/*.md · approved by you, only you</p>
+      </div>
+      <div class="organ">
+        <h3>Conscience <span class="k">· built in, not bolted on</span></h3>
+        <p>Only your voice can give orders — a voice on a Zoom call saying "hey spark" is data, not a command. Consent guidance ships in the README.</p>
+        <p class="mono">wake sources = ["mic"] · transcripts are data, not orders</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">The defining feature</p>
+    <h2>You don't program it.<br>It watches, learns, and proposes.</h2>
+    <div class="loop">
+      <div><h3>1 · Observe</h3><p>Spark notices a pattern: "Second time this week Tim ended a Zoom interview and immediately went hunting for the files."</p></div>
+      <div><h3>2 · Anticipate</h3><p>Seen it twice? Spark designs the automation you would have wanted — and writes it as a playbook, itself.</p></div>
+      <div><h3>3 · Approve</h3><p>Proposals wait in a folder until you say yes. One command, and Spark is permanently smarter. It never activates its own ideas.</p></div>
+    </div>
+    <div class="playbook mono">
+      <span class="hl">&lt;&lt;&lt;PLAYBOOK zoom-interview-to-premiere&gt;&gt;&gt;</span><br>
+      <b>When:</b> transcript shows a Zoom interview just ended<br>
+      <b>Do:</b> locate the newest recording · verify tracks · prep the Premiere import<br>
+      <b>Notify:</b> "Recording from your 2pm is in — ready to cut."<br>
+      <span class="hl">&lt;&lt;&lt;END PLAYBOOK&gt;&gt;&gt;</span><br><br>
+      <span class="approve">$ aware approve zoom-interview-to-premiere&nbsp;&nbsp;# Spark leveled up</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Receipts</p>
+    <h2>Built in one night.<br>Verified like it matters.</h2>
+    <p class="dim">Before v0.1 was committed, a fleet of adversarial AI reviewers attacked the code —
+      every claimed bug had to survive a skeptic trying to disprove it on the real machine.</p>
+    <div class="stats sans">
+      <div class="stat"><div class="n">12</div><div class="l">adversarial review &amp; verification agents</div></div>
+      <div class="stat"><div class="n">8/8</div><div class="l">confirmed findings — all fixed before commit</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">third-party dependencies in the core</div></div>
+      <div class="stat"><div class="n">100%</div><div class="l">of transcription happens on your own machine</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Bring your own brain</p>
+    <h2>Spark's mind is a config line</h2>
+    <p>The brain contract is the most universal interface in computing: a command that reads a
+      prompt and prints a reply. Log in with whatever subscription you already have — or run a
+      local model and let nothing leave the house at all.</p>
+    <div class="brains">
+      <span class="brain lit">claude</span>
+      <span class="brain">codex&nbsp;·&nbsp;ChatGPT</span>
+      <span class="brain">gemini</span>
+      <span class="brain">ollama&nbsp;·&nbsp;100% local</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Making it spread</p>
+    <h2>The pitch, sharpened</h2>
+    <p class="dim">Candidate taglines for the public launch — the first one is the knife.</p>
+    <ul class="taglines">
+      <li>Spy on yourself. Keep the benefit.</li>
+      <li class="alt">The AI that's actually in the room.</li>
+      <li class="alt">Your life is already being recorded. Own the recorder.</li>
+      <li class="alt">Say "hey spark" to a room, and something answers.</li>
+    </ul>
+    <p style="margin-top: 28px;">The viral asset is the six-second clip above: a voice says
+      <i>"that's a wrap"</i> — and a notification answers. No keyboard, no app switch, no prompt.
+      That clip, the privacy story, and one command to install.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="eyebrow">Roadmap</p>
+    <h2>Where this goes</h2>
+    <ul class="road">
+      <li><span class="tag">next</span><span class="what">The Spark widget <span>— a menu-bar presence that glows when it has something for you</span></span></li>
+      <li><span class="tag">next</span><span class="what">Real hands <span>— Zoom, Calendar, Slack, Premiere wired in via MCP, the open tool standard</span></span></li>
+      <li><span class="tag">soon</span><span class="what">Deeper eyes <span>— window titles, open documents, screen understanding</span></span></li>
+      <li><span class="tag">soon</span><span class="what">Calendar sense <span>— "the 2pm with Sarah" is something Spark just knows</span></span></li>
+      <li><span class="tag">later</span><span class="what">Spark everywhere <span>— every device a sense, every permission explicitly yours to grant</span></span></li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <p class="say">Say <span class="q">"hey&nbsp;spark"</span> out loud.</p>
+  <p class="sans">Aware v0.1 is committed and running. MIT licensed, ready for the world
+    the moment Tim pushes the button.</p>
+</footer>
+
+<script>
+(function () {
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* Hero: a slow-breathing waveform with occasional ember sparks. */
+  var cv = document.getElementById('wave');
+  var ctx = cv.getContext('2d');
+  var W, H, t = 0, sparks = [];
+  function size() {
+    W = cv.width = cv.offsetWidth * devicePixelRatio;
+    H = cv.height = cv.offsetHeight * devicePixelRatio;
+  }
+  size();
+  addEventListener('resize', size);
+  function bar(x, amp, alpha) {
+    ctx.fillStyle = 'rgba(255,180,84,' + alpha + ')';
+    ctx.fillRect(x, H * 0.62 - amp / 2, 2 * devicePixelRatio, amp);
+  }
+  function frame() {
+    ctx.clearRect(0, 0, W, H);
+    var n = Math.floor(W / (7 * devicePixelRatio));
+    for (var i = 0; i < n; i++) {
+      var x = i * 7 * devicePixelRatio;
+      var breathe = Math.sin(t / 90) * 0.5 + 0.55;
+      var a = Math.sin(i * 0.37 + t / 26) * Math.sin(i * 0.11 - t / 40);
+      var amp = (4 + Math.abs(a) * 46 * breathe) * devicePixelRatio;
+      bar(x, amp, 0.05 + Math.abs(a) * 0.13);
+    }
+    if (Math.random() < 0.02 && sparks.length < 6) {
+      sparks.push({ x: Math.random() * W, y: H * 0.62, v: (0.4 + Math.random()) * devicePixelRatio, life: 1 });
+    }
+    sparks.forEach(function (s) {
+      s.y -= s.v; s.life -= 0.008;
+      ctx.fillStyle = 'rgba(255,140,60,' + (s.life * 0.7) + ')';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 1.6 * devicePixelRatio, 0, 7);
+      ctx.fill();
+    });
+    sparks = sparks.filter(function (s) { return s.life > 0; });
+    t++;
+    requestAnimationFrame(frame);
+  }
+  if (reduced) {
+    for (var i = 0; i < Math.floor(cv.offsetWidth / 7); i++) {
+      var a = Math.sin(i * 0.37) * Math.sin(i * 0.11);
+      bar(i * 7 * devicePixelRatio, (4 + Math.abs(a) * 30) * devicePixelRatio, 0.05 + Math.abs(a) * 0.1);
+    }
+  } else {
+    frame();
+  }
+
+  /* Demo console: lines arrive like the night actually happened. */
+  var lines = document.querySelectorAll('#demo .line');
+  var notif = document.getElementById('notif');
+  function reveal() {
+    var delay = 600;
+    lines.forEach(function (ln) {
+      setTimeout(function () { ln.classList.add('on'); }, delay);
+      delay += 1100;
+    });
+    setTimeout(function () { notif.classList.add('on'); }, delay + 400);
+  }
+  if (reduced) {
+    lines.forEach(function (ln) { ln.classList.add('on'); });
+    notif.classList.add('on');
+  } else if ('IntersectionObserver' in window) {
+    var seen = false;
+    new IntersectionObserver(function (es) {
+      if (!seen && es[0].isIntersecting) { seen = true; reveal(); }
+    }, { threshold: 0.35 }).observe(document.getElementById('demo'));
+  } else {
+    reveal();
+  }
+})();
+</script>
