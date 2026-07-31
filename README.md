@@ -83,6 +83,24 @@ macOS orange mic indicator disappears — that dot is your ground truth.
 (Bind `aware toggle` to a hotkey with Shortcuts/Raycast/BetterTouchTool
 for a true one-tap mute.)
 
+## The widget — no terminal required
+
+```
+./bin/aware widget        # builds once (~30s, needs Xcode CLT), then lives in your menu bar
+./bin/aware widget --stop # quit it
+```
+
+A ⚡ appears in the menu bar: **bright while listening, dimmed when the
+mic is released.** Click it for the controls — current status, the last
+thing Aware heard, the mind's last message, **Turn On / Turn Off**,
+**Wake now**, and open today's transcript. Native Swift, ~200 lines,
+compiled on your machine, zero runtime dependencies — read the source in
+`widget/AwareBar.swift`.
+
+Note: the first time you Turn On *from the widget*, macOS may ask for
+microphone permission again — permissions are per-app, and the widget is
+a new app in its eyes. Approve once.
+
 First launch: macOS will ask to allow microphone access for your terminal —
 click OK, and if the first chunks come up empty, restart `aware start` once.
 
@@ -188,10 +206,9 @@ Remove with `launchctl unload ~/Library/LaunchAgents/com.aware.spinther.plist`.
 
 ## Roadmap
 
-1. **The Spinther widget** — a menu-bar presence (the little monitor orb —
-   yes, the Halo homage survives the rename):
-   glows when Spinther has something, click to see its latest thought, talk
-   back without leaving whatever you're doing.
+1. ~~**The Spinther widget**~~ — **shipped.** The orb lives in the menu bar
+   (see "The widget" above). Next for it: glow when Spinther has something
+   new, and talk back from a popover.
 2. **Deeper eyes** — window titles, open documents, periodic screen OCR;
    "Tim is editing *S03E04_rough.prproj*" instead of just "Premiere".
 3. **Real hands** — wire Spinther's CLI to the Zoom, Calendar, Otter, Slack and

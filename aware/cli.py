@@ -59,6 +59,14 @@ def _resolve_sources(cfg) -> list[tuple[str, int, str]]:
 
 
 def cmd_start(cfg, args) -> int:
+    # Two daemons = double recording, clobbered pidfile, and a lying orb.
+    existing = _daemon_pid(cfg)
+    if existing:
+        print(f"Aware is already running (pid {existing}).")
+        print("Use `aware off` first — or `tail -f logs/daemon.log` for the live view.")
+        return 1
+    (cfg.state_dir / "capture_error").unlink(missing_ok=True)
+
     persona = cfg.brain["persona"]
     _banner(f"⚡ Aware — {persona} coming online · {datetime.now().strftime('%A %B %d, %I:%M %p')}")
 
@@ -138,7 +146,13 @@ def cmd_start(cfg, args) -> int:
         for c in caps:
             c.stop()
     finally:
-        pid_path.unlink(missing_ok=True)
+        # Only remove the pidfile if it is still OURS — never erase the
+        # record of a daemon that outlives us.
+        try:
+            if pid_path.read_text().strip() == str(os.getpid()):
+                pid_path.unlink()
+        except OSError:
+            pass
     return 0
 
 
@@ -146,21 +160,41 @@ def cmd_start(cfg, args) -> int:
 # aware on / off / toggle / status — the quick switch
 # --------------------------------------------------------------------------
 
+def _pid_is_daemon(pid: int) -> bool:
+    """The pid must actually BE an aware daemon — pids get reused."""
+    out = subprocess.run(["ps", "-o", "command=", "-p", str(pid)],
+                         capture_output=True, text=True).stdout
+    return "-m aware start" in out
+
+
 def _daemon_pid(cfg) -> int | None:
     pid_path = cfg.state_dir / "aware.pid"
     if pid_path.exists():
         try:
             pid = int(pid_path.read_text().strip())
             os.kill(pid, 0)
-            return pid
+            if _pid_is_daemon(pid):
+                return pid
+            pid_path.unlink(missing_ok=True)
         except (ValueError, ProcessLookupError, PermissionError):
             pid_path.unlink(missing_ok=True)
     proc = subprocess.run(["pgrep", "-f", "--", "-m aware start"],
                           capture_output=True, text=True)
     for line in proc.stdout.split():
-        if line.strip().isdigit():
-            return int(line.strip())
+        if line.strip().isdigit() and int(line) != os.getpid():
+            return int(line)
     return None
+
+
+def _capture_alive(cfg, window: float = 45) -> bool:
+    """ffmpeg flushes the live chunk every ~8-10s; a recent wav mtime is
+    proof audio is actually flowing, not just that a pid exists."""
+    now = time.time()
+    try:
+        return any(now - p.stat().st_mtime < window
+                   for p in cfg.chunks_dir.glob("*.wav"))
+    except OSError:
+        return False
 
 
 def cmd_on(cfg, args) -> int:
@@ -210,6 +244,17 @@ def cmd_status(cfg, args) -> int:
     persona = cfg.brain["persona"]
     if pid:
         print(f"⚡ ON — listening (pid {pid})")
+        err_path = cfg.state_dir / "capture_error"
+        pid_path = cfg.state_dir / "aware.pid"
+        started_recently = (
+            pid_path.exists() and time.time() - pid_path.stat().st_mtime < 60
+        )
+        if err_path.exists():
+            hint = err_path.read_text().strip().splitlines()[-1]
+            print(f"⚠ AUDIO NOT FLOWING — {hint}")
+        elif not started_recently and not _capture_alive(cfg):
+            print("⚠ AUDIO NOT FLOWING — no capture activity for 45s+ "
+                  "(device gone or mic blocked); check `aware devices` and mic permission")
     else:
         print("OFF — microphone released")
     entries = transcript.read_window(cfg.transcripts_dir, 120)
@@ -270,6 +315,45 @@ def cmd_approve(cfg, args) -> int:
     dest = cfg.playbooks_dir / src.name
     shutil.move(str(src), dest)
     print(f"Approved: {dest.name} is now an active playbook.")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# aware widget — the menu-bar orb
+# --------------------------------------------------------------------------
+
+def cmd_widget(cfg, args) -> int:
+    widget_dir = cfg.home / "widget"
+    src = widget_dir / "AwareBar.swift"
+    plist = widget_dir / "Info.plist"
+    binary = widget_dir / "AwareBar"
+
+    if args.stop:
+        subprocess.run(["pkill", "-x", "AwareBar"], capture_output=True)
+        print("Widget stopped.")
+        return 0
+
+    if shutil.which("swiftc") is None:
+        print("The widget needs the Swift compiler (one-time):  xcode-select --install")
+        return 1
+
+    if not binary.exists() or binary.stat().st_mtime < src.stat().st_mtime:
+        print("Building the widget (one-time, ~30s)…")
+        result = subprocess.run(
+            ["swiftc", "-O", str(src), "-o", str(binary),
+             "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT",
+             "-Xlinker", "__info_plist", "-Xlinker", str(plist)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print(f"Build failed:\n{(result.stderr or '').strip()[:600]}")
+            return 1
+
+    subprocess.run(["pkill", "-x", "AwareBar"], capture_output=True)
+    subprocess.Popen([str(binary)], stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+    print("⚡ Widget is live — look at your menu bar (top right).")
+    print("   Click the bolt: on/off, wake the mind, read the last thing it heard.")
     return 0
 
 
@@ -348,6 +432,9 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("devices", help="list audio input devices")
 
+    p = sub.add_parser("widget", help="launch the menu-bar widget (builds it first time)")
+    p.add_argument("--stop", action="store_true", help="quit the widget")
+
     sub.add_parser("on", help="switch Aware ON (background)")
     sub.add_parser("off", help="switch Aware OFF — kills the daemon, releases the mic")
     sub.add_parser("toggle", help="flip between ON and OFF")
@@ -371,11 +458,15 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("test", help="self-test the transcription pipeline")
     sub.add_parser("doctor", help="check dependencies and devices")
 
+    # Behave like a proper Unix citizen when piped (`aware log | head`).
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
     args = parser.parse_args(argv)
     cfg = config.load()
 
     commands = {
         "devices": cmd_devices,
+        "widget": cmd_widget,
         "on": cmd_on,
         "off": cmd_off,
         "toggle": cmd_toggle,

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.aware.widget</string>
+    <key>CFBundleName</key>
+    <string>Aware</string>
+    <key>LSUIElement</key>
+    <true/>
+    <!-- If macOS attributes a mic request to the widget (e.g. Aware turned
+         on from the menu), this is the sentence in the permission dialog. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Aware transcribes what it hears locally on this Mac and deletes the audio immediately. Nothing is recorded or uploaded.</string>
+</dict>
+</plist>

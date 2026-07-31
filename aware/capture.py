@@ -43,15 +43,21 @@ class Capture:
         ]
 
     def _run(self) -> None:
+        fast_exits = 0
+        err_path = self.cfg.state_dir / "capture_error"
         while not self._stop.is_set():
             found = devices.resolve(self.device_name)
             if found is None:
                 self.log(f"[capture:{self.label}] device '{self.device_name}' "
                          f"not found; retrying in 10s")
+                err_path.write_text(
+                    f"[{self.label}] audio device '{self.device_name}' not found\n"
+                    f"Check `aware devices` and config.toml.\n")
                 if self._stop.wait(10):
                     return
                 continue
             idx, _ = found
+            started = time.time()
             self._proc = subprocess.Popen(
                 self._command(idx),
                 stdout=subprocess.DEVNULL,
@@ -61,6 +67,18 @@ class Capture:
             _, err = self._proc.communicate()
             if self._stop.is_set():
                 return
+            # ffmpeg dying instantly, repeatedly = mic permission denied.
+            # A privacy tool must SAY so, not crash-loop in silence.
+            if time.time() - started < 2:
+                fast_exits += 1
+                if fast_exits >= 3:
+                    err_path.write_text(
+                        f"[{self.label}] recorder exits immediately "
+                        f"({fast_exits}x): {(err or '').strip()[:300]}\n"
+                        "Mic blocked? System Settings → Privacy & Security → Microphone.\n")
+            else:
+                fast_exits = 0
+                err_path.unlink(missing_ok=True)
             self.log(
                 f"[capture:{self.label}] ffmpeg exited unexpectedly "
                 f"({(err or '').strip()[:200]}); restarting in 3s"

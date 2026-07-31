@@ -31,6 +31,8 @@ enabled = true
 interval_seconds = 15
 
 [brain]
+# The mind's name — used in notifications, the widget, and the wake print.
+persona = "Spinther"
 enabled = true
 # Heartbeat. Spinther only actually runs when there's NEW speech since last
 # time, so quiet rooms cost nothing.
