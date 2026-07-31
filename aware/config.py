@@ -21,7 +21,7 @@ DEFAULTS = {
         "whisper_bin": "whisper-cli",
         "model": "models/ggml-base.en.bin",
         "language": "en",
-        "min_rms": 120,  # int16 RMS below this = silence, chunk skipped
+        "min_rms": 60,  # int16 RMS below this = silence, chunk skipped
     },
     "activity": {
         "enabled": True,

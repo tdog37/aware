@@ -20,7 +20,10 @@ whisper_bin = "whisper-cli"
 model = "models/ggml-base.en.bin"
 language = "en"
 # Chunks quieter than this RMS (0-32767) are treated as silence and skipped.
-min_rms = 120
+# Field-tested: a quiet room reads ~35-45; speech at low mic gain can average
+# under 100 across a 30s chunk. Keep this gate low and set your mic gain so
+# speech peaks 1000+.
+min_rms = 60
 
 [activity]
 # The Eyes: log which app is frontmost so Spinther knows what you're working on.
