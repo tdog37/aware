@@ -4,6 +4,7 @@ import argparse
 import queue
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -118,6 +119,12 @@ def cmd_start(cfg, args) -> int:
             target=brain.scheduler, args=(cfg, stop, wake_q), name="brain", daemon=True))
     for t in threads:
         t.start()
+
+    # SIGTERM (launchctl unload, kill) must clean up like Ctrl-C does —
+    # an orphaned ffmpeg silently recording is the one unforgivable bug.
+    def _sigterm(signum, frame):
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, _sigterm)
 
     try:
         while True:

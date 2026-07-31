@@ -6,4 +6,7 @@ AWARE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
 [ -d /opt/homebrew/bin ] && PATH="/opt/homebrew/bin:$PATH"
 export PATH
 export PYTHONPATH="$AWARE_HOME"
+# Unbuffered stdout so live transcript lines appear immediately in logs
+# and pipes (launchd's daemon.log would otherwise stay empty for ages).
+export PYTHONUNBUFFERED=1
 exec python3 -m aware "$@"
