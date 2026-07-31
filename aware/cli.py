@@ -326,7 +326,9 @@ def cmd_widget(cfg, args) -> int:
     widget_dir = cfg.home / "widget"
     src = widget_dir / "AwareBar.swift"
     plist = widget_dir / "Info.plist"
-    binary = widget_dir / "AwareBar"
+    # A real .app bundle: macOS only gives notification identity to real apps.
+    app_dir = widget_dir / "Aware.app"
+    binary = app_dir / "Contents" / "MacOS" / "AwareBar"
 
     if args.stop:
         subprocess.run(["pkill", "-x", "AwareBar"], capture_output=True)
@@ -337,22 +339,26 @@ def cmd_widget(cfg, args) -> int:
         print("The widget needs the Swift compiler (one-time):  xcode-select --install")
         return 1
 
-    if not binary.exists() or binary.stat().st_mtime < src.stat().st_mtime:
+    stale = (not binary.exists()
+             or binary.stat().st_mtime < src.stat().st_mtime
+             or binary.stat().st_mtime < plist.stat().st_mtime)
+    if stale:
         print("Building the widget (one-time, ~30s)…")
+        binary.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run(
-            ["swiftc", "-O", str(src), "-o", str(binary),
-             "-Xlinker", "-sectcreate", "-Xlinker", "__TEXT",
-             "-Xlinker", "__info_plist", "-Xlinker", str(plist)],
+            ["swiftc", "-O", str(src), "-o", str(binary)],
             capture_output=True, text=True,
         )
         if result.returncode != 0:
             print(f"Build failed:\n{(result.stderr or '').strip()[:600]}")
             return 1
+        shutil.copy(plist, app_dir / "Contents" / "Info.plist")
 
     subprocess.run(["pkill", "-x", "AwareBar"], capture_output=True)
-    subprocess.Popen([str(binary)], stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, start_new_session=True)
+    time.sleep(0.5)
+    subprocess.run(["open", str(app_dir)], capture_output=True)
     print("⚡ Widget is live — look at your menu bar (top right).")
+    print("   First run: macOS will ask to allow notifications from Aware — click Allow.")
     print("   Click the bolt: on/off, wake the mind, read the last thing it heard.")
     return 0
 

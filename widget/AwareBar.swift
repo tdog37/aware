@@ -4,6 +4,7 @@
 
 import AppKit
 import Darwin
+import UserNotifications
 
 let exeURL = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
 let awareRoot = exeURL.deletingLastPathComponent().deletingLastPathComponent()
@@ -128,7 +129,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return Date().timeIntervalSince(when) < window
     }
 
+    // Byte offset into state/notify.jsonl — only entries appended after
+    // launch are delivered, never replayed history.
+    private var notifyOffset: UInt64 = 0
+    private var notifyQueue: URL {
+        awareRoot.appendingPathComponent("state/notify.jsonl")
+    }
+
     func applicationDidFinishLaunching(_ note: Notification) {
+        UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        if let size = try? FileManager.default
+            .attributesOfItem(atPath: notifyQueue.path)[.size] as? UInt64 {
+            notifyOffset = size
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -137,6 +151,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshIcon()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             self?.refreshIcon()
+            self?.deliverQueuedNotifications()
+        }
+    }
+
+    private func deliverQueuedNotifications() {
+        guard let fh = try? FileHandle(forReadingFrom: notifyQueue) else { return }
+        defer { try? fh.close() }
+        let size = (try? fh.seekToEnd()) ?? 0
+        if size < notifyOffset { notifyOffset = 0 }  // file was rotated/reset
+        guard size > notifyOffset else { return }
+        try? fh.seek(toOffset: notifyOffset)
+        guard let data = try? fh.readToEnd(),
+              let text = String(data: data, encoding: .utf8) else { return }
+        notifyOffset = size
+        for line in text.split(separator: "\n") where !line.isEmpty {
+            guard let json = (try? JSONSerialization.jsonObject(with: Data(line.utf8)))
+                    as? [String: Any],
+                  let message = json["message"] as? String else { continue }
+            let content = UNMutableNotificationContent()
+            content.title = (json["title"] as? String) ?? "Aware"
+            content.body = message
+            content.sound = .default
+            UNUserNotificationCenter.current().add(UNNotificationRequest(
+                identifier: UUID().uuidString, content: content, trigger: nil))
         }
     }
 
