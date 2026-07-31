@@ -117,6 +117,7 @@ def _slugify(name: str) -> str:
 
 def _handle_output(cfg, output: str, log=print) -> None:
     state = load_state(cfg)
+    persona = cfg.brain["persona"]
 
     for m in PLAYBOOK_BLOCK.finditer(output):
         slug, body = _slugify(m.group(1)), m.group(2).strip() + "\n"
@@ -128,7 +129,7 @@ def _handle_output(cfg, output: str, log=print) -> None:
         dest.write_text(body)
         log(f"[brain] proposed new playbook: {dest.name}")
         if cfg.brain["notify"]:
-            notify.send("Spark learned something",
+            notify.send(f"{persona} learned something",
                         f"New playbook proposed: {dest.stem} — review with `aware proposals`")
 
     for line in output.splitlines():
@@ -137,7 +138,7 @@ def _handle_output(cfg, output: str, log=print) -> None:
             msg = line[len("NOTIFY:"):].strip()
             if msg:
                 if cfg.brain["notify"]:
-                    notify.send("Spark", msg)
+                    notify.send(persona, msg)
                 state["recent_notifications"] = (
                     state.get("recent_notifications", []) + [msg]
                 )[-10:]

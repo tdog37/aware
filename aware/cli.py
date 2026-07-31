@@ -57,7 +57,8 @@ def _resolve_sources(cfg) -> list[tuple[str, int, str]]:
 
 
 def cmd_start(cfg, args) -> int:
-    _banner(f"⚡ Aware — Spark coming online · {datetime.now().strftime('%A %B %d, %I:%M %p')}")
+    persona = cfg.brain["persona"]
+    _banner(f"⚡ Aware — {persona} coming online · {datetime.now().strftime('%A %B %d, %I:%M %p')}")
 
     sources = _resolve_sources(cfg)
     if not sources:
@@ -69,10 +70,10 @@ def cmd_start(cfg, args) -> int:
 
     brain_on = cfg.brain["enabled"] and not args.no_brain
     if brain_on:
-        print(f"  spark: {cfg.brain['model']}, heartbeat every "
+        print(f"  mind:  {persona} · {cfg.brain['model']}, heartbeat every "
               f"{cfg.brain['interval_seconds']}s (wakes only on new speech)")
     else:
-        print("  spark: off (senses only)")
+        print(f"  mind:  off (senses only)")
     if cfg.activity["enabled"]:
         print(f"  eyes:  frontmost-app tracking every {cfg.activity['interval_seconds']}s")
     print(f"  wake:  {', '.join(repr(p) for p in cfg.wake['phrases'])}")
@@ -81,9 +82,9 @@ def cmd_start(cfg, args) -> int:
     stop = threading.Event()
     wake_q: queue.Queue = queue.Queue()
 
-    # Whisper punctuates freely ("Hey. Spark,"), so match wake phrases on
-    # punctuation-stripped text. And only the mic can give Spark orders —
-    # a voice on a Zoom call or in a video saying "hey spark" is not Tim.
+    # Whisper punctuates freely ("Hey. Access,"), so match wake phrases on
+    # punctuation-stripped text. And only the mic can give the mind orders —
+    # a voice on a Zoom call or in a video saying the wake phrase is not Tim.
     def _norm(s: str) -> str:
         return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
 
@@ -96,7 +97,7 @@ def cmd_start(cfg, args) -> int:
         if entry["source"] in wake_sources and any(
             p in _norm(entry["text"]) for p in wake_phrases
         ):
-            print("        ^ wake phrase — waking Spark now")
+            print(f"        ^ wake phrase — waking {persona} now")
             wake_q.put(entry)
 
     caps = [capture.Capture(label, name, cfg) for label, idx, name in sources]

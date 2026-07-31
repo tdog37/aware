@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.aware.spark</string>
+    <string>com.aware.access</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Users/timsafford/aware/bin/aware</string>

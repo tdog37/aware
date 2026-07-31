@@ -28,6 +28,7 @@ DEFAULTS = {
         "interval_seconds": 15,
     },
     "brain": {
+        "persona": "Access",  # the mind's name — yours to change
         "enabled": True,
         "interval_seconds": 120,
         "window_minutes": 15,
@@ -40,7 +41,7 @@ DEFAULTS = {
         "notify": True,
     },
     "wake": {
-        "phrases": ["hey spark", "hey aware", "hey claude"],
+        "phrases": ["hey access", "hey aware", "hey claude"],
         "sources": ["mic"],  # only these sources can issue wake commands
     },
 }
