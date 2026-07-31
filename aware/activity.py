@@ -50,16 +50,28 @@ def log_focus(context_dir: Path, app: str, title: str | None) -> None:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+# Apps whose window titles name a person or expose a secret. We still log
+# "Tim was in Telegram for 40 minutes" — never with whom.
+DEFAULT_TITLE_EXCLUDE = [
+    "1Password", "Messages", "Telegram", "Signal", "WhatsApp",
+    "Mail", "Keychain Access",
+]
+
+
 def watch(cfg, stop_event, log=print) -> None:
     from . import eyes
 
     last = None
     interval = cfg.activity["interval_seconds"]
-    deep = cfg.activity.get("window_titles", True)
+    deep = cfg.activity.get("window_titles", False)
+    deny = {a.lower() for a in
+            cfg.activity.get("exclude_title_apps", DEFAULT_TITLE_EXCLUDE)}
     while not stop_event.is_set():
         app, title = eyes.front_window() if deep else (front_app(), None)
         if app is None and deep:  # no Accessibility permission — degrade
             app = front_app()
+        if app and app.lower() in deny:
+            title = None
         if app and (app, title) != last:
             log_focus(cfg.context_dir, app, title)
             last = (app, title)

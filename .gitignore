@@ -6,7 +6,7 @@ logs/
 state/
 audio/
 models/
-memory/observations.md
+memory/
 playbooks/proposed/
 __pycache__/
 *.pyc

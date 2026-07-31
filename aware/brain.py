@@ -13,10 +13,12 @@ Everything else is reasoning, kept in the brain log.
 """
 
 import json
+import os
 import queue
 import re
 import subprocess
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import activity, notify, transcript
@@ -34,19 +36,27 @@ def _state_path(cfg) -> Path:
     return cfg.state_dir / "brain.json"
 
 
-def load_state(cfg) -> dict:
+def load_state(cfg, strict: bool = False) -> dict:
+    """strict=True raises on an unreadable file, so gates can fail CLOSED
+    rather than resurrecting a briefing that already ran."""
     p = _state_path(cfg)
     if p.exists():
         try:
             return json.loads(p.read_text())
         except json.JSONDecodeError:
-            pass
+            if strict:
+                raise
     return {"runs": 0, "last_run": None, "last_transcript_ts": None,
             "recent_notifications": []}
 
 
 def save_state(cfg, state: dict) -> None:
-    _state_path(cfg).write_text(json.dumps(state, indent=2))
+    # Atomic: a concurrent reader sees the old file or the new one, never a
+    # half-written one (the daemon and manual `aware brain` runs overlap).
+    p = _state_path(cfg)
+    tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(state, indent=2))
+    os.replace(tmp, p)
 
 
 # --------------------------------------------------------------------------
@@ -62,18 +72,28 @@ def _memory_tail(cfg, lines: int = 60) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
+_SCHEDULE_CACHE: tuple[float, str] | None = None
+_SCHEDULE_TTL = 600  # the day's schedule does not change every two minutes
+
+
 def _today_schedule(cfg) -> str:
     """Calendar sense: the mind should never have to ask what day it is or
-    what's on it. Injected into every wake, cheap and cached by the OS."""
+    what's on it. Injected into every wake, memoized so a network feed (or a
+    slow AppleScript fallback) isn't paid for on every heartbeat."""
+    global _SCHEDULE_CACHE
+    if _SCHEDULE_CACHE and time.time() - _SCHEDULE_CACHE[0] < _SCHEDULE_TTL:
+        return _SCHEDULE_CACHE[1]
     script = cfg.home / "bin" / "today-calendar"
     if not script.exists():
         return "(no calendar reader installed)"
     try:
         out = subprocess.run([str(script)], capture_output=True, text=True,
-                             timeout=30, cwd=str(cfg.home)).stdout.strip()
+                             timeout=45, cwd=str(cfg.home)).stdout.strip()
     except (subprocess.TimeoutExpired, OSError):
         return "(calendar unavailable)"
-    return out or "(nothing on the calendar today)"
+    result = out or "(nothing on the calendar today)"
+    _SCHEDULE_CACHE = (time.time(), result)
+    return result
 
 
 def _dossier_index(cfg) -> str:
@@ -290,7 +310,10 @@ def _has_new_speech(cfg) -> bool:
     entries = transcript.read_window(cfg.transcripts_dir, cfg.brain["window_minutes"])
     if not entries:
         return False
-    last_seen = load_state(cfg).get("last_transcript_ts")
+    try:
+        last_seen = load_state(cfg, strict=True).get("last_transcript_ts")
+    except json.JSONDecodeError:
+        return False  # unreadable state: stay quiet rather than re-run
     return last_seen is None or entries[-1]["ts"] > last_seen
 
 
@@ -305,18 +328,45 @@ BRIEFING_REASON = (
 )
 
 
-def _briefing_due(cfg) -> bool:
+BRIEFING_WINDOW_MINUTES = 120  # how late a "morning" briefing may still fire
+_briefing_warned: set[str] = set()
+
+
+def _briefing_state(cfg, log=print) -> str:
+    """'due' -> brief now · 'stale' -> the window passed, mark the day done
+    WITHOUT briefing · 'no' -> nothing to do.
+
+    A lower bound alone means "your day is starting" can fire at 8 PM after a
+    late daemon start — which it did, at 1:54 PM, during development."""
     at = (cfg.briefing.get("at") or "").strip()
     if not cfg.briefing.get("enabled", True) or not at:
-        return False
+        return "no"
+    hh = mm = -1
     try:
         hh, mm = (int(x) for x in at.split(":", 1))
     except ValueError:
-        return False
+        pass
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        if at not in _briefing_warned:  # warn once, not every heartbeat
+            _briefing_warned.add(at)
+            log(f'[brain] [briefing] at = "{at}" is not 24-hour "HH:MM" '
+                f"— briefing disabled")
+        return "no"
+
     now = datetime.now()
-    if (now.hour, now.minute) < (hh, mm):
-        return False
-    return load_state(cfg).get("last_briefing") != now.strftime("%Y-%m-%d")
+    try:
+        last = load_state(cfg, strict=True).get("last_briefing")
+    except json.JSONDecodeError:
+        return "no"  # unreadable state: assume already briefed, never repeat
+    if last == now.strftime("%Y-%m-%d"):
+        return "no"
+
+    start = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if now < start:
+        return "no"
+    if now - start > timedelta(minutes=BRIEFING_WINDOW_MINUTES):
+        return "stale"
+    return "due"
 
 
 def scheduler(cfg, stop_event, wake_queue: queue.Queue, log=print) -> None:
@@ -335,15 +385,20 @@ def scheduler(cfg, stop_event, wake_queue: queue.Queue, log=print) -> None:
             return
 
         # The briefing speaks first — it doesn't wait for Tim to say anything.
-        if reason is None and _briefing_due(cfg):
-            state = load_state(cfg)
-            state["last_briefing"] = datetime.now().strftime("%Y-%m-%d")
-            save_state(cfg, state)
-            try:
-                run_once(cfg, reason=BRIEFING_REASON, log=log)
-            except Exception as e:
-                log(f"[brain] briefing error: {e}")
-            continue
+        if reason is None:
+            due = _briefing_state(cfg, log=log)
+            if due != "no":
+                state = load_state(cfg)
+                state["last_briefing"] = datetime.now().strftime("%Y-%m-%d")
+                save_state(cfg, state)
+                if due == "stale":
+                    log("[brain] briefing window passed — skipping today's")
+                    continue
+                try:
+                    run_once(cfg, reason=BRIEFING_REASON, log=log)
+                except Exception as e:
+                    log(f"[brain] briefing error: {e}")
+                continue
 
         if reason is None and not _has_new_speech(cfg):
             continue

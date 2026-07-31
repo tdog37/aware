@@ -30,9 +30,16 @@ min_rms = 60
 enabled = true
 interval_seconds = 15
 # Also capture the window title ("S03E04_rough.prproj" beats "Premiere Pro").
-# Needs macOS Accessibility permission — System Settings → Privacy & Security
-# → Accessibility. Without it, Aware quietly falls back to app names only.
+# OFF by default: titles reveal far more than app names — the document you're
+# reading, the person you're messaging, the site you're on. Turn it on only if
+# you want that precision. Needs macOS Accessibility permission (System
+# Settings → Privacy & Security → Accessibility); without it, Aware quietly
+# falls back to app names.
 window_titles = true
+# Even with titles on, these apps log the app only — never the title, so a
+# correspondent's name is never recorded.
+exclude_title_apps = ["1Password", "Messages", "Telegram", "Signal",
+                      "WhatsApp", "Mail", "Keychain Access"]
 
 [briefing]
 # Once a day, Spinther speaks first: what's on your calendar, what's unread,

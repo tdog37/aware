@@ -51,7 +51,11 @@ The goal, in Tim's words:
   transcription); the audio is deleted, the words are kept in
   `transcripts/YYYY-MM-DD.jsonl`.
 - **Eyes** — every 15 s Aware notes which app is frontmost, so Spinther knows
-  "Tim's been in Premiere for the last 40 minutes."
+  "Tim's been in Premiere for the last 40 minutes." Turn on
+  `window_titles` and it sees *what* you're working on
+  (`S03E04_rough.prproj`) — off by default, because titles reveal far more
+  than app names, and messaging apps and password managers are excluded from
+  title capture even when it's on.
 - **Spinther** — every 2 minutes (only if someone actually spoke), Claude gets
   the last 15 minutes of transcript + activity + its own memory + the
   playbooks, and decides what to do. Saying **"hey spinther"** out loud wakes it
@@ -59,7 +63,15 @@ The goal, in Tim's words:
 - **The learning loop** — Spinther records observations (`REMEMBER:`), and when
   it sees a pattern repeat, it writes a **new playbook itself** into
   `playbooks/proposed/`. You approve with one command, and Spinther got
-  permanently smarter. You never had to set up the task.
+  permanently smarter. You never had to set up the task. (It works: on day
+  one it watched an interview wrap, noticed the Drive→Finder→Premiere
+  sequence, and proposed the automation unprompted.)
+- **Dossiers** — durable, dated files on the people, companies and shows that
+  matter to your work, in `memory/dossiers/`. Plain markdown, git-ignored,
+  yours to read or delete.
+- **The morning briefing** — once a day it speaks first: what's on the
+  calendar, what's unread, what yesterday left unfinished. Set the time (or
+  turn it off) under `[briefing]`.
 
 ## Quickstart
 

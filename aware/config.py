@@ -26,7 +26,9 @@ DEFAULTS = {
     "activity": {
         "enabled": True,
         "interval_seconds": 15,
-        "window_titles": True,  # needs macOS Accessibility permission
+        # Off by default: titles reveal far more than app names. Opt in the
+        # same way you opt into keeping audio.
+        "window_titles": False,  # needs macOS Accessibility permission
     },
     "briefing": {
         "enabled": True,
