@@ -11,3 +11,4 @@ playbooks/proposed/
 __pycache__/
 *.pyc
 .DS_Store
+widget/AwareBar
