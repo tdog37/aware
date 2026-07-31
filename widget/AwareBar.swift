@@ -374,6 +374,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ? "\(unread) new message\(unread == 1 ? "" : "s") from \(persona)" : tip
     }
 
+    /// Playbooks the mind has proposed and is waiting on Tim to rule on.
+    private func proposals() -> [(slug: String, title: String, path: URL)] {
+        let dir = awareRoot.appendingPathComponent("playbooks/proposed")
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil) else { return [] }
+        return files.filter { $0.pathExtension == "md" }.sorted { $0.path < $1.path }
+            .map { url in
+                let body = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                let headline = body.split(whereSeparator: \.isNewline)
+                    .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+                    .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) } ?? url
+                    .deletingPathExtension().lastPathComponent
+                return (url.deletingPathExtension().lastPathComponent, String(headline), url)
+            }
+    }
+
     /// Last few messages, newest first — so a missed card is never lost.
     private func recentMessages(_ limit: Int = 5) -> [(String, String)] {
         guard let text = try? String(contentsOf: notifyQueue, encoding: .utf8) else { return [] }
@@ -438,6 +454,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                   range: NSRange(location: 0, length: text.length))
                 item.attributedTitle = text
                 item.isEnabled = false
+                menu.addItem(item)
+            }
+        }
+
+        // Playbooks awaiting Tim's ruling — the approval gate, in the app.
+        let pending = proposals()
+        if !pending.isEmpty {
+            menu.addItem(.separator())
+            menu.addItem(info("\(persona) proposed \(pending.count) "
+                              + "playbook\(pending.count == 1 ? "" : "s"):"))
+            for p in pending {
+                let item = NSMenuItem(title: "  \(p.title)", action: nil, keyEquivalent: "")
+                item.isEnabled = true
+                let sub = NSMenu()
+                sub.autoenablesItems = false
+                for (label, sel) in [("Read it…", #selector(readProposal(_:))),
+                                     ("Approve — make it active", #selector(approveProposal(_:))),
+                                     ("Discard", #selector(discardProposal(_:)))] {
+                    let action = NSMenuItem(title: label, action: sel, keyEquivalent: "")
+                    action.target = self
+                    action.representedObject = p.slug
+                    action.isEnabled = true
+                    sub.addItem(action)
+                }
+                item.submenu = sub
                 menu.addItem(item)
             }
         }
@@ -522,6 +563,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.refreshIcon()
             }
         }
+    }
+
+    @objc func readProposal(_ sender: NSMenuItem) {
+        guard let slug = sender.representedObject as? String else { return }
+        let url = awareRoot.appendingPathComponent("playbooks/proposed/\(slug).md")
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        p.arguments = ["-e", url.path]
+        try? p.run()
+    }
+
+    @objc func approveProposal(_ sender: NSMenuItem) {
+        guard let slug = sender.representedObject as? String else { return }
+        runAware(["approve", slug])
+    }
+
+    @objc func discardProposal(_ sender: NSMenuItem) {
+        guard let slug = sender.representedObject as? String else { return }
+        runAware(["discard", slug])
+        showCard(title: persona, message: "Discarded \"\(slug)\". I'll keep the idea "
+                 + "in playbooks/proposed/discarded/ rather than propose it again.")
     }
 
     @objc func openTranscript() {

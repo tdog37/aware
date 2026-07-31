@@ -303,7 +303,7 @@ def cmd_brain(cfg, args) -> int:
 
 
 def cmd_proposals(cfg, args) -> int:
-    proposals = sorted(cfg.proposed_dir.glob("*.md"))
+    proposals = sorted(p for p in cfg.proposed_dir.glob("*.md"))
     if not proposals:
         print("No proposed playbooks. When Aware notices a repeating pattern, "
               "its proposals will appear here.")
@@ -315,14 +315,36 @@ def cmd_proposals(cfg, args) -> int:
     return 0
 
 
+def _proposal_path(cfg, name: str) -> Path | None:
+    # Never let a name escape the proposals folder.
+    p = (cfg.proposed_dir / f"{Path(name).name}.md").resolve()
+    return p if p.parent == cfg.proposed_dir.resolve() and p.exists() else None
+
+
 def cmd_approve(cfg, args) -> int:
-    src = cfg.proposed_dir / f"{args.name}.md"
-    if not src.exists():
+    src = _proposal_path(cfg, args.name)
+    if src is None:
         print(f"No proposed playbook named '{args.name}'. See `aware proposals`.")
         return 1
     dest = cfg.playbooks_dir / src.name
     shutil.move(str(src), dest)
+    from . import notify
+    notify.send(cfg.brain["persona"],
+                f"Playbook approved: {dest.stem}. It's active from my next wake.")
     print(f"Approved: {dest.name} is now an active playbook.")
+    return 0
+
+
+def cmd_discard(cfg, args) -> int:
+    src = _proposal_path(cfg, args.name)
+    if src is None:
+        print(f"No proposed playbook named '{args.name}'. See `aware proposals`.")
+        return 1
+    # Keep discarded ideas — a rejected proposal is training data, not trash.
+    graveyard = cfg.proposed_dir / "discarded"
+    graveyard.mkdir(exist_ok=True)
+    shutil.move(str(src), graveyard / src.name)
+    print(f"Discarded: {src.stem} (kept in playbooks/proposed/discarded/).")
     return 0
 
 
@@ -485,6 +507,9 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("approve", help="promote a proposed playbook to active")
     p.add_argument("name")
 
+    p = sub.add_parser("discard", help="reject a proposed playbook")
+    p.add_argument("name")
+
     sub.add_parser("test", help="self-test the transcription pipeline")
     sub.add_parser("doctor", help="check dependencies and devices")
 
@@ -507,6 +532,7 @@ def main(argv: list[str] | None = None) -> None:
         "brain": cmd_brain,
         "proposals": cmd_proposals,
         "approve": cmd_approve,
+        "discard": cmd_discard,
         "test": cmd_test,
         "doctor": cmd_doctor,
     }
