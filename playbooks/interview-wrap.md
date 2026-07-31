@@ -7,8 +7,8 @@ app switch away from Zoom.
 
 **Do:**
 1. REMEMBER the session: who/what it seemed to be about, start/end time.
-2. `ls -t ~/Documents/Zoom | head -3` — find the newest recording folder,
-   check its contents and size (`du -sh`). Zoom may still be writing it;
+2. Run `./bin/zoom-latest` — the newest recording folders with time and
+   size. Zoom may still be writing the newest one;
    if the newest folder predates this session, say the recording hasn't
    landed yet and REMEMBER to check on the next wake.
 3. If you can see the calendar, match the session to the event name.

@@ -1,0 +1,17 @@
+#!/bin/sh
+# The ONLY hand Aware's mind has on your recordings.
+#
+# Takes no arguments (any are ignored on purpose): a fixed, read-only report
+# on the newest Zoom recording folders. This exists because granting the
+# brain raw `find` also granted it `-delete` and `-exec sh -c` — a text
+# prefix rule cannot distinguish "look" from "destroy". One narrow script
+# can.
+ZOOM="$HOME/Documents/Zoom"
+[ -d "$ZOOM" ] || { echo "no Zoom folder at $ZOOM"; exit 0; }
+
+# Newest 5 recording folders: modified time, size, name.
+ls -dt "$ZOOM"/*/ 2>/dev/null | head -5 | while IFS= read -r dir; do
+  when=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$dir" 2>/dev/null)
+  size=$(du -sh "$dir" 2>/dev/null | cut -f1)
+  printf '%s  %6s  %s\n' "$when" "$size" "$(basename "$dir")"
+done

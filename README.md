@@ -130,14 +130,28 @@ Transcript lines are then tagged `mic:` (you) vs `system:` (them).
 Spinther has hands now, and the grant is a file you can read:
 `.claude/settings.json` says exactly what it may touch. Out of the box:
 
-- **See recordings** — read access to `~/Documents/Zoom` (via `--add-dir`
-  in config.toml) plus `ls`/`stat`/`du`/`find`, so "the interview wrapped
-  → here's the recording, 601 MB" is a real capability, field-tested.
+- **See recordings** — read access to `~/Documents/Zoom`, and exactly one
+  shell command: `bin/zoom-latest`, a fixed read-only report of the newest
+  recordings (name, size, time). So "the interview wrapped → here's the
+  recording, 601 MB" is real and field-tested.
+  *Why a wrapper?* Permission rules are **text prefix** matches, not
+  semantic ones. Granting `find ~/Documents/Zoom:*` also grants
+  `find ~/Documents/Zoom -delete` and `find … -exec sh -c '…'` — deletion
+  and arbitrary code execution — and a `rm`/`sudo` deny list doesn't catch
+  either, because those match on the first word too. An adversarial review
+  caught exactly this in an earlier version of Aware. One narrow script
+  can express "look, don't touch"; a prefix rule cannot.
 - **Write its own artifacts** — meeting notes to `transcripts/notes/`,
   observations to `memory/`, playbook proposals to `playbooks/proposed/`.
-  Nothing else in the repo is writable; the code and constitution are
-  explicitly denied.
-- **Research** — WebSearch/WebFetch when a request or playbook calls for it.
+  Everything else is explicitly denied — code, constitution, config, and
+  the active `playbooks/` folder (so the `aware approve` gate can't be
+  bypassed), for Write *and* Edit alike.
+- **Research** — WebSearch. Bare `WebFetch` is deliberately absent: the mic
+  hears untrusted audio, and a URL is an exfiltration channel. Add specific
+  domains if you want them.
+- **Denied outright** — networking tools (`curl`, `wget`, `nc`, `ssh`),
+  interpreters (`sh`, `python`, `node`), package managers, `git`/`gh`, and
+  reads of `~/.ssh`, `~/.aws`, keychains, and `.env` files.
 - **Your MCP tools** — anything added with `claude mcp add` (calendar,
   Slack, Premiere, your own dashboards) is available to Spinther on its
   next wake. Note: connectors attached to the claude.ai *app* don't

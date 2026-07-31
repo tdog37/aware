@@ -169,12 +169,96 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let json = (try? JSONSerialization.jsonObject(with: Data(line.utf8)))
                     as? [String: Any],
                   let message = json["message"] as? String else { continue }
-            let content = UNMutableNotificationContent()
-            content.title = (json["title"] as? String) ?? "Aware"
-            content.body = message
-            content.sound = .default
-            UNUserNotificationCenter.current().add(UNNotificationRequest(
-                identifier: UUID().uuidString, content: content, trigger: nil))
+            let title = (json["title"] as? String) ?? "Aware"
+            // Try the real Notification Center; if macOS hasn't authorized
+            // this locally-built app (the common case), show our own card so
+            // the message NEVER silently disappears.
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                if settings.authorizationStatus == .authorized {
+                    let content = UNMutableNotificationContent()
+                    content.title = title
+                    content.body = message
+                    content.sound = .default
+                    UNUserNotificationCenter.current().add(UNNotificationRequest(
+                        identifier: UUID().uuidString, content: content, trigger: nil))
+                } else {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.showCard(title: title, message: message)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - The card (permission-free notification)
+
+    private var cards: [NSWindow] = []
+
+    func showCard(title: String, message: String) {
+        let width: CGFloat = 380
+        let text = NSTextField(wrappingLabelWithString: message)
+        text.font = .systemFont(ofSize: 13)
+        text.textColor = NSColor(calibratedRed: 0.93, green: 0.89, blue: 0.85, alpha: 1)
+        text.preferredMaxLayoutWidth = width - 76
+        text.sizeToFit()
+
+        let head = NSTextField(labelWithString: "⚡  \(title)")
+        head.font = .systemFont(ofSize: 13, weight: .semibold)
+        head.textColor = NSColor(calibratedRed: 1.0, green: 0.71, blue: 0.33, alpha: 1)
+        head.sizeToFit()
+
+        let height = max(72, text.frame.height + 54)
+        let card = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered, defer: false)
+        card.isFloatingPanel = true
+        card.level = .statusBar
+        card.backgroundColor = .clear
+        card.isOpaque = false
+        card.hasShadow = true
+        card.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+
+        let bg = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+        bg.material = .hudWindow
+        bg.state = .active
+        bg.wantsLayer = true
+        bg.layer?.cornerRadius = 14
+        bg.layer?.borderWidth = 1
+        bg.layer?.borderColor = NSColor(calibratedRed: 1.0, green: 0.71, blue: 0.33, alpha: 0.45).cgColor
+        bg.layer?.backgroundColor = NSColor(calibratedRed: 0.09, green: 0.07, blue: 0.06, alpha: 0.94).cgColor
+
+        head.frame.origin = NSPoint(x: 18, y: height - 30)
+        text.frame.origin = NSPoint(x: 20, y: height - 34 - text.frame.height)
+        bg.addSubview(head)
+        bg.addSubview(text)
+        card.contentView = bg
+
+        // Stack under the menu bar on the screen with the mouse.
+        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+        if let f = screen?.visibleFrame {
+            let y = f.maxY - height - 12 - CGFloat(cards.count) * (height + 10)
+            card.setFrameOrigin(NSPoint(x: f.maxX - width - 16, y: y))
+        }
+        card.alphaValue = 0
+        card.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.25
+            card.animator().alphaValue = 1
+        }
+        NSSound(named: "Glass")?.play()
+        cards.append(card)
+
+        let seconds = min(20.0, 6.0 + Double(message.count) / 18.0)
+        Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.4
+                card.animator().alphaValue = 0
+            }, completionHandler: {
+                card.orderOut(nil)
+                self?.cards.removeAll { $0 == card }
+            })
         }
     }
 

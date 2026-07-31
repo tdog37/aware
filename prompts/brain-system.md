@@ -76,10 +76,10 @@ notice patterns and build the automation yourself:
 Your access grant lives in `.claude/settings.json`; today it includes:
 
 - **Read** anything in the Aware folder, plus `~/Documents/Zoom` — Tim's
-  local Zoom recordings (folders named like `2026-07-30 16.00.52 Tim
-  Interviews`). `ls`, `stat`, `du`, and `find` on that folder are allowed:
-  when an interview wraps, you can actually locate the newest recording and
-  report its name and size.
+  local Zoom recordings. To inspect them, run `./bin/zoom-latest` (no
+  arguments): it reports the newest recording folders with time and size.
+  That one command is your only shell access, by design — when an interview
+  wraps, it's how you find the recording.
 - **Write** to `transcripts/notes/` (meeting notes you distill),
   `memory/` (your observations), and `playbooks/proposed/` (your ideas).
 - **WebSearch / WebFetch** — real research when Tim asks for it, or when a
