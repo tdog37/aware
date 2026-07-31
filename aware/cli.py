@@ -1,6 +1,7 @@
 """The `aware` command."""
 
 import argparse
+import os
 import queue
 import re
 import shutil
@@ -120,12 +121,14 @@ def cmd_start(cfg, args) -> int:
     for t in threads:
         t.start()
 
-    # SIGTERM (launchctl unload, kill) must clean up like Ctrl-C does —
+    # SIGTERM (launchctl unload, `aware off`) must clean up like Ctrl-C —
     # an orphaned ffmpeg silently recording is the one unforgivable bug.
     def _sigterm(signum, frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, _sigterm)
 
+    pid_path = cfg.state_dir / "aware.pid"
+    pid_path.write_text(str(os.getpid()))
     try:
         while True:
             time.sleep(1)
@@ -134,6 +137,92 @@ def cmd_start(cfg, args) -> int:
         stop.set()
         for c in caps:
             c.stop()
+    finally:
+        pid_path.unlink(missing_ok=True)
+    return 0
+
+
+# --------------------------------------------------------------------------
+# aware on / off / toggle / status — the quick switch
+# --------------------------------------------------------------------------
+
+def _daemon_pid(cfg) -> int | None:
+    pid_path = cfg.state_dir / "aware.pid"
+    if pid_path.exists():
+        try:
+            pid = int(pid_path.read_text().strip())
+            os.kill(pid, 0)
+            return pid
+        except (ValueError, ProcessLookupError, PermissionError):
+            pid_path.unlink(missing_ok=True)
+    proc = subprocess.run(["pgrep", "-f", "--", "-m aware start"],
+                          capture_output=True, text=True)
+    for line in proc.stdout.split():
+        if line.strip().isdigit():
+            return int(line.strip())
+    return None
+
+
+def cmd_on(cfg, args) -> int:
+    pid = _daemon_pid(cfg)
+    if pid:
+        print(f"⚡ Aware is already ON (pid {pid}).")
+        return 0
+    log_path = cfg.logs_dir / "daemon.log"
+    with log_path.open("a") as logf:
+        proc = subprocess.Popen(
+            [str(cfg.home / "bin" / "aware"), "start"],
+            stdout=logf, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, start_new_session=True,
+        )
+    time.sleep(2)
+    if proc.poll() is None:
+        print(f"⚡ Aware is ON — listening (pid {proc.pid}). Live log: logs/daemon.log")
+        return 0
+    print(f"Aware failed to start — see {log_path}")
+    return 1
+
+
+def cmd_off(cfg, args) -> int:
+    pid = _daemon_pid(cfg)
+    if not pid:
+        print("Aware is already OFF.")
+        return 0
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(20):
+        try:
+            os.kill(pid, 0)
+            time.sleep(0.25)
+        except ProcessLookupError:
+            break
+    # Belt and suspenders: no recorder may ever outlive the daemon.
+    subprocess.run(["pkill", "-f", str(cfg.chunks_dir)], capture_output=True)
+    print("Aware is OFF — microphone released.")
+    return 0
+
+
+def cmd_toggle(cfg, args) -> int:
+    return cmd_off(cfg, args) if _daemon_pid(cfg) else cmd_on(cfg, args)
+
+
+def cmd_status(cfg, args) -> int:
+    pid = _daemon_pid(cfg)
+    persona = cfg.brain["persona"]
+    if pid:
+        print(f"⚡ ON — listening (pid {pid})")
+    else:
+        print("OFF — microphone released")
+    entries = transcript.read_window(cfg.transcripts_dir, 120)
+    if entries:
+        last = entries[-1]
+        ts = datetime.fromisoformat(last["ts"]).strftime("%I:%M %p")
+        text = last["text"]
+        print(f'last heard at {ts}: "{text[:70]}{"…" if len(text) > 70 else ""}"')
+    else:
+        print("nothing heard in the last 2 hours")
+    state = brain.load_state(cfg)
+    if state.get("last_run"):
+        print(f"{persona} last woke: {state['last_run']} ({state.get('runs', 0)} wakes total)")
     return 0
 
 
@@ -259,7 +348,12 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("devices", help="list audio input devices")
 
-    p = sub.add_parser("start", help="start listening (capture + transcribe + brain)")
+    sub.add_parser("on", help="switch Aware ON (background)")
+    sub.add_parser("off", help="switch Aware OFF — kills the daemon, releases the mic")
+    sub.add_parser("toggle", help="flip between ON and OFF")
+    sub.add_parser("status", help="is it listening? what did it last hear?")
+
+    p = sub.add_parser("start", help="start listening in the foreground (live console)")
     p.add_argument("--no-brain", action="store_true", help="senses only, no Claude runs")
 
     p = sub.add_parser("log", help="show recent transcript")
@@ -282,6 +376,10 @@ def main(argv: list[str] | None = None) -> None:
 
     commands = {
         "devices": cmd_devices,
+        "on": cmd_on,
+        "off": cmd_off,
+        "toggle": cmd_toggle,
+        "status": cmd_status,
         "start": cmd_start,
         "log": cmd_log,
         "brain": cmd_brain,

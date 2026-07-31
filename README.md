@@ -66,8 +66,22 @@ The goal, in Tim's words:
 ```
 ./bin/aware doctor      # check dependencies and devices
 ./bin/aware test        # prove the transcription pipeline works
-./bin/aware start       # go live (Ctrl-C to stop)
+./bin/aware start       # go live in the foreground (Ctrl-C to stop)
 ```
+
+## The switch
+
+```
+./bin/aware toggle      # flip ON/OFF — one command, either direction
+./bin/aware on          # start listening in the background
+./bin/aware off         # stop everything, release the microphone
+./bin/aware status      # listening? what did it last hear? when did the mind last wake?
+```
+
+`off` means off: the daemon dies, every recorder dies with it, and the
+macOS orange mic indicator disappears — that dot is your ground truth.
+(Bind `aware toggle` to a hotkey with Shortcuts/Raycast/BetterTouchTool
+for a true one-tap mute.)
 
 First launch: macOS will ask to allow microphone access for your terminal —
 click OK, and if the first chunks come up empty, restart `aware start` once.

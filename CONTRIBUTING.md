@@ -21,7 +21,7 @@ Aware's design philosophy, in four rules:
 | Path | What it is |
 |---|---|
 | `bin/aware` | Launcher (sets PATH/PYTHONPATH, runs the package) |
-| `aware/cli.py` | The `aware` command: start, log, brain, proposals, approve, test, doctor |
+| `aware/cli.py` | The `aware` command: on/off/toggle/status, start, log, brain, proposals, approve, test, doctor |
 | `aware/capture.py` | Ears: ffmpeg per source → 30 s WAV chunks (device re-resolved by name on every restart) |
 | `aware/transcribe.py` | whisper.cpp on closed chunks; silence gate; hallucination filter; provably-closed chunk lifecycle |
 | `aware/transcript.py` | Daily JSONL transcript store + time-window reads |
