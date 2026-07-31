@@ -82,7 +82,7 @@ def cmd_start(cfg, args) -> int:
     stop = threading.Event()
     wake_q: queue.Queue = queue.Queue()
 
-    # Whisper punctuates freely ("Hey. Access,"), so match wake phrases on
+    # Whisper punctuates freely ("Hey. Spinther,"), so match wake phrases on
     # punctuation-stripped text. And only the mic can give the mind orders —
     # a voice on a Zoom call or in a video saying the wake phrase is not Tim.
     def _norm(s: str) -> str:

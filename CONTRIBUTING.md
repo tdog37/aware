@@ -6,10 +6,10 @@ Aware's design philosophy, in four rules:
    no venv, no dependency rot. Capabilities come from subprocess seams to
    great tools (ffmpeg, whisper.cpp, an AI CLI), each swappable in config.
 2. **Files are the API.** Transcripts are JSONL. Memory is markdown.
-   Playbooks are markdown. Access's constitution is markdown. Anything a
+   Playbooks are markdown. Spinther's constitution is markdown. Anything a
    human can read, a human can audit, edit, or delete — that's the trust
    model, so don't bury state in databases or hidden formats.
-3. **The brain is a commodity; the senses are the product.** Access is "any
+3. **The brain is a commodity; the senses are the product.** Spinther is "any
    command that reads a prompt on stdin and prints a reply" (see
    `brain.command`). Never couple the core to one AI vendor.
 4. **Every claim in the docs must be true in the code.** This project asks
@@ -26,16 +26,16 @@ Aware's design philosophy, in four rules:
 | `aware/transcribe.py` | whisper.cpp on closed chunks; silence gate; hallucination filter; provably-closed chunk lifecycle |
 | `aware/transcript.py` | Daily JSONL transcript store + time-window reads |
 | `aware/activity.py` | Eyes: frontmost-app log via `lsappinfo` |
-| `aware/brain.py` | Access: prompt assembly, AI invocation, NOTIFY/REMEMBER/PLAYBOOK protocol, heartbeat scheduler |
+| `aware/brain.py` | Spinther: prompt assembly, AI invocation, NOTIFY/REMEMBER/PLAYBOOK protocol, heartbeat scheduler |
 | `aware/devices.py` | avfoundation device discovery/resolution |
 | `aware/notify.py` | macOS notifications |
 | `aware/config.py` | Defaults + `config.toml` loading (tomllib) |
-| `prompts/brain-system.md` | Access's constitution — identity, discipline, learning loop, output protocol |
-| `playbooks/` | Active automations; `playbooks/proposed/` holds Access's own drafts awaiting approval |
+| `prompts/brain-system.md` | Spinther's constitution — identity, discipline, learning loop, output protocol |
+| `playbooks/` | Active automations; `playbooks/proposed/` holds Spinther's own drafts awaiting approval |
 | `service/` | launchd plist for always-on mode |
 
 Runtime data (all git-ignored, all local): `chunks/` in-flight audio,
-`transcripts/`, `context/` activity logs, `memory/` Access's observations,
+`transcripts/`, `context/` activity logs, `memory/` Spinther's observations,
 `state/` brain state, `logs/`.
 
 ## Developing
@@ -43,7 +43,7 @@ Runtime data (all git-ignored, all local): `chunks/` in-flight audio,
 ```
 ./bin/aware doctor        # environment check
 ./bin/aware test          # say → ffmpeg → whisper round-trip
-./bin/aware brain --dry-run   # inspect the exact prompt Access receives
+./bin/aware brain --dry-run   # inspect the exact prompt Spinther receives
 ```
 
 `aware start` uses your real microphone; develop the chunk pipeline against

@@ -23,26 +23,26 @@ language = "en"
 min_rms = 120
 
 [activity]
-# The Eyes: log which app is frontmost so Access knows what you're working on.
+# The Eyes: log which app is frontmost so Spinther knows what you're working on.
 enabled = true
 interval_seconds = 15
 
 [brain]
 enabled = true
-# Heartbeat. Access only actually runs when there's NEW speech since last
+# Heartbeat. Spinther only actually runs when there's NEW speech since last
 # time, so quiet rooms cost nothing.
 interval_seconds = 120
-# How much recent context Access sees each time it wakes.
+# How much recent context Spinther sees each time it wakes.
 window_minutes = 15
 claude_bin = "claude"
 model = "claude-sonnet-5"          # or "claude-haiku-4-5-20251001" for cheaper triage
-# "default" = Access can look but mostly not touch. Once you trust your
+# "default" = Spinther can look but mostly not touch. Once you trust your
 # playbooks, "acceptEdits" lets it write files (notes, proposals) itself.
 permission_mode = "default"
 timeout_seconds = 300
 extra_args = []
 # Bring Your Own Brain: leave empty to use the claude settings above, or set
-# a full command (prompt is piped on stdin) to power Access with any model:
+# a full command (prompt is piped on stdin) to power Spinther with any model:
 #   command = ["codex", "exec"]            # OpenAI, ChatGPT login
 #   command = ["gemini", "-p"]             # Google login
 #   command = ["ollama", "run", "llama3"]  # fully local, no cloud at all
@@ -50,9 +50,9 @@ command = []
 notify = true
 
 [wake]
-# Say any of these out loud and Access wakes instantly, treating the line as
+# Say any of these out loud and Spinther wakes instantly, treating the line as
 # a direct instruction.
-phrases = ["hey access", "hey aware", "hey claude"]
-# Only these sources can give Access orders. Keep this to your own mic — a
+phrases = ["hey spinther", "hey aware", "hey claude"]
+# Only these sources can give Spinther orders. Keep this to your own mic — a
 # voice on a Zoom call or in a YouTube video is not you.
 sources = ["mic"]
