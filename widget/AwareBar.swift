@@ -199,19 +199,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cards: [NSWindow] = []
 
     func showCard(title: String, message: String) {
-        let width: CGFloat = 380
+        let width: CGFloat = 400
+        let textWidth = width - 38
+        let font = NSFont.systemFont(ofSize: 13.5)
+
+        // Measure the WRAPPED height ourselves. sizeToFit() on a wrapping
+        // label under-reports it, which silently clipped long messages.
+        let para = NSMutableParagraphStyle()
+        para.lineBreakMode = .byWordWrapping
+        let measured = (message as NSString).boundingRect(
+            with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font, .paragraphStyle: para]).height
+        let textHeight = ceil(measured) + 4
+
         let text = NSTextField(wrappingLabelWithString: message)
-        text.font = .systemFont(ofSize: 13)
-        text.textColor = NSColor(calibratedRed: 0.93, green: 0.89, blue: 0.85, alpha: 1)
-        text.preferredMaxLayoutWidth = width - 76
-        text.sizeToFit()
+        text.font = font
+        // Explicit near-white; never a semantic color, which would flip to
+        // black-on-black or white-on-white with the system theme.
+        text.textColor = NSColor(calibratedRed: 0.96, green: 0.94, blue: 0.91, alpha: 1)
+        text.drawsBackground = false
+        text.preferredMaxLayoutWidth = textWidth
+        text.frame = NSRect(x: 0, y: 0, width: textWidth, height: textHeight)
 
         let head = NSTextField(labelWithString: "⚡  \(title)")
-        head.font = .systemFont(ofSize: 13, weight: .semibold)
+        head.font = .systemFont(ofSize: 12.5, weight: .semibold)
         head.textColor = NSColor(calibratedRed: 1.0, green: 0.71, blue: 0.33, alpha: 1)
+        head.drawsBackground = false
         head.sizeToFit()
 
-        let height = max(72, text.frame.height + 54)
+        let hint = NSTextField(labelWithString: "click to dismiss")
+        hint.font = .systemFont(ofSize: 10)
+        hint.textColor = NSColor(calibratedRed: 0.55, green: 0.50, blue: 0.44, alpha: 1)
+        hint.drawsBackground = false
+        hint.sizeToFit()
+
+        let height = max(78, textHeight + 50)
         let card = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: width, height: height),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -223,48 +246,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         card.hasShadow = true
         card.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-        let bg = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: height))
-        bg.material = .hudWindow
-        bg.state = .active
+        // A plain layer-backed view, NOT NSVisualEffectView: its material
+        // follows the system theme, which turned cream-on-charcoal into
+        // white-on-white in light mode and made messages unreadable.
+        let bg = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
         bg.wantsLayer = true
         bg.layer?.cornerRadius = 14
-        bg.layer?.borderWidth = 1
-        bg.layer?.borderColor = NSColor(calibratedRed: 1.0, green: 0.71, blue: 0.33, alpha: 0.45).cgColor
-        bg.layer?.backgroundColor = NSColor(calibratedRed: 0.09, green: 0.07, blue: 0.06, alpha: 0.94).cgColor
+        bg.layer?.borderWidth = 1.5
+        bg.layer?.borderColor = NSColor(calibratedRed: 1.0, green: 0.71, blue: 0.33, alpha: 0.8).cgColor
+        bg.layer?.backgroundColor = NSColor(calibratedRed: 0.08, green: 0.065, blue: 0.055, alpha: 1.0).cgColor
 
-        head.frame.origin = NSPoint(x: 18, y: height - 30)
-        text.frame.origin = NSPoint(x: 20, y: height - 34 - text.frame.height)
+        head.frame.origin = NSPoint(x: 18, y: height - 26)
+        hint.frame.origin = NSPoint(x: width - hint.frame.width - 16, y: height - 24)
+        text.frame.origin = NSPoint(x: 19, y: 14)
         bg.addSubview(head)
+        bg.addSubview(hint)
         bg.addSubview(text)
         card.contentView = bg
 
-        // Stack under the menu bar on the screen with the mouse.
-        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
-            ?? NSScreen.main
-        if let f = screen?.visibleFrame {
+        // Always the main screen, under the menu bar — predictable beats clever.
+        if let f = NSScreen.main?.visibleFrame {
             let y = f.maxY - height - 12 - CGFloat(cards.count) * (height + 10)
             card.setFrameOrigin(NSPoint(x: f.maxX - width - 16, y: y))
         }
-        card.alphaValue = 0
+        // Visible immediately — no fade-in to fail silently.
+        card.alphaValue = 1
         card.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.25
-            card.animator().alphaValue = 1
-        }
         NSSound(named: "Glass")?.play()
         cards.append(card)
+        unread += 1
+        refreshIcon()
 
-        let seconds = min(20.0, 6.0 + Double(message.count) / 18.0)
-        Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
-            NSAnimationContext.runAnimationGroup({ ctx in
-                ctx.duration = 0.4
-                card.animator().alphaValue = 0
-            }, completionHandler: {
-                card.orderOut(nil)
-                self?.cards.removeAll { $0 == card }
-            })
+        // Click anywhere on the card to dismiss it.
+        let click = NSClickGestureRecognizer(target: self, action: #selector(dismissCard(_:)))
+        bg.addGestureRecognizer(click)
+
+        // Stays put for two minutes — a message you never saw is a message
+        // that never arrived. The menu-bar badge outlives even this.
+        Timer.scheduledTimer(withTimeInterval: 120, repeats: false) { [weak self] _ in
+            self?.close(card)
         }
     }
+
+    private func close(_ card: NSWindow) {
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.3
+            card.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            card.orderOut(nil)
+            self?.cards.removeAll { $0 == card }
+            self?.restack()
+        })
+    }
+
+    @objc private func dismissCard(_ sender: NSGestureRecognizer) {
+        if let card = sender.view?.window { close(card) }
+    }
+
+    private func restack() {
+        guard let f = (NSScreen.main?.visibleFrame) else { return }
+        for (i, card) in cards.enumerated() {
+            let h = card.frame.height
+            let y = f.maxY - h - 12 - CGFloat(i) * (h + 10)
+            card.setFrameOrigin(NSPoint(x: f.maxX - card.frame.width - 16, y: y))
+        }
+    }
+
+    // Messages shown but not yet acknowledged by opening the menu.
+    private var unread = 0
 
     private enum OrbState { case off, blocked, hearing, quiet }
 
@@ -305,19 +354,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             symbol = "bolt"; color = .controlTextColor
             tip = "Aware is listening (quiet room)"
         }
-        if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip) {
+        // An unread message outranks every other state: the icon must say
+        // "I have something for you" until Tim actually looks.
+        let sym = unread > 0 ? "bell.badge.fill" : symbol
+        let tint = unread > 0 ? NSColor.systemOrange : color
+        if let image = NSImage(systemSymbolName: sym, accessibilityDescription: tip) {
             let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
-                .applying(.init(paletteColors: [color]))
+                .applying(.init(paletteColors: [tint]))
             button.image = image.withSymbolConfiguration(config)
             button.attributedTitle = NSAttributedString(string: "")
         } else {  // symbol unavailable: fall back to a glyph
             button.image = nil
             button.attributedTitle = NSAttributedString(
-                string: state == .hearing ? "◉\u{FE0E}" : "⚡\u{FE0E}",
-                attributes: [.foregroundColor: color,
+                string: unread > 0 ? "●\u{FE0E}" : "⚡\u{FE0E}",
+                attributes: [.foregroundColor: tint,
                              .font: NSFont.systemFont(ofSize: 15, weight: .medium)])
         }
-        button.toolTip = tip
+        button.toolTip = unread > 0
+            ? "\(unread) new message\(unread == 1 ? "" : "s") from \(persona)" : tip
+    }
+
+    /// Last few messages, newest first — so a missed card is never lost.
+    private func recentMessages(_ limit: Int = 5) -> [(String, String)] {
+        guard let text = try? String(contentsOf: notifyQueue, encoding: .utf8) else { return [] }
+        var out: [(String, String)] = []
+        for line in text.split(separator: "\n").suffix(limit).reversed() {
+            guard let json = (try? JSONSerialization.jsonObject(with: Data(line.utf8)))
+                    as? [String: Any],
+                  let msg = json["message"] as? String else { continue }
+            let ts = (json["ts"] as? String) ?? ""
+            out.append((ts.count >= 16 ? String(ts.dropFirst(11).prefix(5)) : "", msg))
+        }
+        return out
     }
 
     // MARK: - Menu
@@ -348,7 +416,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .quiet:   menu.addItem(info("⚡ Listening (quiet room)"))
         }
         if let heard = lastHeard() { menu.addItem(info("Heard \(heard)")) }
-        if let note = lastNotification() { menu.addItem(info("\(persona): \(note)")) }
+
+        let recent = recentMessages()
+        if !recent.isEmpty {
+            menu.addItem(.separator())
+            menu.addItem(info("From \(persona):"))
+            for (time, msg) in recent {
+                // Wrap long messages so nothing is cut off mid-thought.
+                let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+                let text = NSMutableAttributedString(
+                    string: "\(time)  ", attributes: [
+                        .foregroundColor: NSColor.tertiaryLabelColor,
+                        .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)])
+                text.append(NSAttributedString(string: msg, attributes: [
+                    .foregroundColor: NSColor.labelColor,
+                    .font: NSFont.systemFont(ofSize: 12)]))
+                let para = NSMutableParagraphStyle()
+                para.lineBreakMode = .byWordWrapping
+                para.maximumLineHeight = 15
+                text.addAttribute(.paragraphStyle, value: para,
+                                  range: NSRange(location: 0, length: text.length))
+                item.attributedTitle = text
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+        }
+
+        // Opening the menu counts as reading them.
+        unread = 0
+        refreshIcon()
 
         menu.addItem(.separator())
         menu.addItem(action(on ? "Turn Off (release mic)" : "Turn On (start listening)",
