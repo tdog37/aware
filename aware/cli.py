@@ -186,15 +186,23 @@ def _daemon_pid(cfg) -> int | None:
     return None
 
 
-def _capture_alive(cfg, window: float = 45) -> bool:
-    """ffmpeg flushes the live chunk every ~8-10s; a recent wav mtime is
-    proof audio is actually flowing, not just that a pid exists."""
+def _capture_alive(cfg, window: float = 150) -> bool:
+    """Proof audio is actually flowing, not just that a pid exists: a
+    recently-written chunk, or recently-transcribed words. The window is
+    generous — rollover, whisper runtime and cleanup leave normal gaps, and
+    a false 'not flowing' alarm is worse than none."""
     now = time.time()
     try:
-        return any(now - p.stat().st_mtime < window
-                   for p in cfg.chunks_dir.glob("*.wav"))
+        if any(now - p.stat().st_mtime < window
+               for p in cfg.chunks_dir.glob("*.wav")):
+            return True
     except OSError:
-        return False
+        pass
+    entries = transcript.read_window(cfg.transcripts_dir, int(window // 60) + 2)
+    if entries:
+        last = datetime.fromisoformat(entries[-1]["end"])
+        return (datetime.now() - last).total_seconds() < window
+    return False
 
 
 def cmd_on(cfg, args) -> int:
@@ -247,7 +255,7 @@ def cmd_status(cfg, args) -> int:
         err_path = cfg.state_dir / "capture_error"
         pid_path = cfg.state_dir / "aware.pid"
         started_recently = (
-            pid_path.exists() and time.time() - pid_path.stat().st_mtime < 60
+            pid_path.exists() and time.time() - pid_path.stat().st_mtime < 180
         )
         if err_path.exists():
             hint = err_path.read_text().strip().splitlines()[-1]
@@ -340,8 +348,8 @@ def cmd_widget(cfg, args) -> int:
         return 1
 
     stale = (not binary.exists()
-             or binary.stat().st_mtime < src.stat().st_mtime
-             or binary.stat().st_mtime < plist.stat().st_mtime)
+             or binary.stat().st_mtime <= src.stat().st_mtime
+             or binary.stat().st_mtime <= plist.stat().st_mtime)
     if stale:
         print("Building the widget (one-time, ~30s)…")
         binary.parent.mkdir(parents=True, exist_ok=True)
@@ -353,6 +361,9 @@ def cmd_widget(cfg, args) -> int:
             print(f"Build failed:\n{(result.stderr or '').strip()[:600]}")
             return 1
         shutil.copy(plist, app_dir / "Contents" / "Info.plist")
+        # Ad-hoc sign: unsigned bundles are treated as damaged by macOS.
+        subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app_dir)],
+                       capture_output=True)
 
     subprocess.run(["pkill", "-x", "AwareBar"], capture_output=True)
     time.sleep(0.5)
@@ -360,6 +371,17 @@ def cmd_widget(cfg, args) -> int:
     print("⚡ Widget is live — look at your menu bar (top right).")
     print("   First run: macOS will ask to allow notifications from Aware — click Allow.")
     print("   Click the bolt: on/off, wake the mind, read the last thing it heard.")
+    return 0
+
+
+def cmd_say(cfg, args) -> int:
+    from . import notify
+    persona = cfg.brain["persona"]
+    notify.send(persona, "Test card — if you can read this, notifications work.")
+    if subprocess.run(["pgrep", "-x", "AwareBar"], capture_output=True).returncode != 0:
+        print("Queued, but the widget isn't running — start it with `aware widget`.")
+        return 1
+    print(f"Sent. A card from {persona} should appear at the top-right of your screen.")
     return 0
 
 
@@ -441,6 +463,8 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("widget", help="launch the menu-bar widget (builds it first time)")
     p.add_argument("--stop", action="store_true", help="quit the widget")
 
+    sub.add_parser("say", help="send yourself a test notification card")
+
     sub.add_parser("on", help="switch Aware ON (background)")
     sub.add_parser("off", help="switch Aware OFF — kills the daemon, releases the mic")
     sub.add_parser("toggle", help="flip between ON and OFF")
@@ -473,6 +497,7 @@ def main(argv: list[str] | None = None) -> None:
     commands = {
         "devices": cmd_devices,
         "widget": cmd_widget,
+        "say": cmd_say,
         "on": cmd_on,
         "off": cmd_off,
         "toggle": cmd_toggle,

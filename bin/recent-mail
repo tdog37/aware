@@ -1,0 +1,26 @@
+#!/bin/sh
+# Recent unread mail — HEADERS ONLY (time, sender, subject). Read-only,
+# no arguments (any are ignored), never opens message bodies, never sends,
+# never deletes. Reads Mail.app, so it covers whatever accounts you already
+# have there (Gmail included) with no OAuth and no tokens on disk.
+osascript <<'APPLESCRIPT' 2>/dev/null
+set out to ""
+set cutoff to (current date) - (2 * days)
+tell application "Mail"
+    repeat with acct in accounts
+        try
+            set inb to mailbox "INBOX" of acct
+            set msgs to (messages of inb whose read status is false and date received > cutoff)
+            repeat with m in msgs
+                set out to out & (time string of (date received of m)) & "  " & ¬
+                    (sender of m) & "  —  " & (subject of m) & linefeed
+            end repeat
+        end try
+    end repeat
+end tell
+if out is "" then
+    return "no unread mail in the last 2 days"
+else
+    return out
+end if
+APPLESCRIPT

@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Today's Google Calendar, read-only. Takes no arguments (any are ignored).
+
+Reads your calendar's private iCal feed — one secret URL, no OAuth dance, no
+browser automation, no tokens beyond that URL. Setup:
+
+  Google Calendar -> Settings -> (pick a calendar) -> Integrate calendar ->
+  "Secret address in iCal format" -> copy it, then:
+
+      echo 'PASTE_URL_HERE' > ~/aware/state/gcal.url
+
+One URL per line for multiple calendars. state/ is git-ignored, so the
+secret never leaves this Mac. Falls back to macOS Calendar.app when no feed
+is configured.
+"""
+
+import re
+import subprocess
+import sys
+import urllib.request
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+HOME = Path(__file__).resolve().parent.parent
+FEEDS = HOME / "state" / "gcal.url"
+
+LOCAL_FALLBACK = """
+set out to ""
+set today to current date
+set hours of today to 0
+set minutes of today to 0
+set seconds of today to 0
+set tomorrow to today + (1 * days)
+tell application "Calendar"
+    repeat with c in calendars
+        try
+            set todaysEvents to (every event of c whose start date >= today and start date < tomorrow)
+            repeat with e in todaysEvents
+                set out to out & (time string of (start date of e)) & "  " & (summary of e) & linefeed
+            end repeat
+        end try
+    end repeat
+end tell
+return out
+"""
+
+
+def local_calendar() -> str:
+    try:
+        out = subprocess.run(["osascript", "-e", LOCAL_FALLBACK],
+                             capture_output=True, text=True, timeout=30).stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        out = ""
+    return out or ("No Google Calendar feed configured (state/gcal.url) and "
+                   "nothing on the local calendar today.")
+
+
+def parse_dt(value: str) -> datetime | None:
+    value = value.strip()
+    for fmt in ("%Y%m%dT%H%M%SZ", "%Y%m%dT%H%M%S", "%Y%m%d"):
+        try:
+            dt = datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+        if fmt.endswith("Z"):  # UTC -> local wall time
+            dt = dt.replace(tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
+        return dt
+    return None
+
+
+def unescape(text: str) -> str:
+    return (text.replace("\\,", ",").replace("\\;", ";")
+                .replace("\\n", " ").replace("\\N", " ").strip())
+
+
+def events_today(ics: str) -> list[tuple[datetime, str, str]]:
+    # RFC5545 folds long lines with a leading space/tab on continuations.
+    ics = re.sub(r"\r?\n[ \t]", "", ics)
+    today, tomorrow = date.today(), date.today() + timedelta(days=1)
+    found, cur = [], {}
+    for line in ics.splitlines():
+        if line.startswith("BEGIN:VEVENT"):
+            cur = {}
+        elif line.startswith("END:VEVENT"):
+            start = cur.get("start")
+            if start and today <= start.date() < tomorrow:
+                found.append((start, cur.get("summary", "(untitled)"), cur.get("loc", "")))
+            cur = {}
+        elif line.startswith("DTSTART"):
+            cur["start"] = parse_dt(line.split(":", 1)[-1])
+        elif line.startswith("SUMMARY:"):
+            cur["summary"] = unescape(line.split(":", 1)[1])
+        elif line.startswith("LOCATION:"):
+            cur["loc"] = unescape(line.split(":", 1)[1])[:40]
+    return sorted(found)
+
+
+def main() -> int:
+    if not FEEDS.exists() or not FEEDS.read_text().strip():
+        print(local_calendar())
+        return 0
+
+    all_events = []
+    for url in FEEDS.read_text().splitlines():
+        url = url.strip()
+        if not url:
+            continue
+        try:
+            with urllib.request.urlopen(url, timeout=20) as resp:
+                all_events += events_today(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            print(f"(could not read one calendar feed: {type(e).__name__})", file=sys.stderr)
+
+    if not all_events:
+        print("Nothing on the calendar today.")
+        return 0
+    for start, summary, loc in sorted(all_events):
+        stamp = start.strftime("%I:%M %p").lstrip("0")
+        print(f"{stamp}  {summary}" + (f"  ({loc})" if loc else ""))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

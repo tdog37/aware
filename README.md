@@ -130,10 +130,15 @@ Transcript lines are then tagged `mic:` (you) vs `system:` (them).
 Spinther has hands now, and the grant is a file you can read:
 `.claude/settings.json` says exactly what it may touch. Out of the box:
 
-- **See recordings** — read access to `~/Documents/Zoom`, and exactly one
-  shell command: `bin/zoom-latest`, a fixed read-only report of the newest
-  recordings (name, size, time). So "the interview wrapped → here's the
-  recording, 601 MB" is real and field-tested.
+- **Three narrow commands**, each read-only and argument-free — the mind's
+  entire shell access:
+  - `bin/zoom-latest` — newest Zoom recordings (name, size, time), so "the
+    interview wrapped → here's the recording, 601 MB" is real.
+  - `bin/today-calendar` — today's schedule, read from your Google Calendar's
+    private iCal feed (one secret URL in git-ignored `state/gcal.url`; no
+    OAuth, no browser automation, no tokens). Falls back to macOS Calendar.
+  - `bin/recent-mail` — unread mail headers from the last 2 days via Mail.app
+    (sender, subject, time — never message bodies).
   *Why a wrapper?* Permission rules are **text prefix** matches, not
   semantic ones. Granting `find ~/Documents/Zoom:*` also grants
   `find ~/Documents/Zoom -delete` and `find … -exec sh -c '…'` — deletion

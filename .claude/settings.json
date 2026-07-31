@@ -78,6 +78,8 @@
       "Read(./**)",
       "Read(//Users/timsafford/Documents/Zoom/**)",
       "Bash(./bin/zoom-latest)",
+      "Bash(./bin/today-calendar)",
+      "Bash(./bin/recent-mail)",
       "Write(./transcripts/notes/**)",
       "Edit(./transcripts/notes/**)",
       "Write(./memory/**)",

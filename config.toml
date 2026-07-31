@@ -63,8 +63,15 @@ notify = true
 
 [wake]
 # Say any of these out loud and Spinther wakes instantly, treating the line as
-# a direct instruction.
-phrases = ["hey spinther", "hey aware", "hey claude"]
+# a direct instruction. Speech recognition mangles unusual names — "Spinther"
+# comes back as Spencer, Splinter, Spinner — so it answers to all of them.
+# Whatever you name your mind, add its mishearings here (check `aware log`
+# to see how your voice actually lands).
+phrases = [
+    "hey spinther", "hey aware", "hey claude",
+    "hey spencer", "hey splinter", "hey spinner", "hey spinter",
+    "hey spin there", "hey spender", "hey sphinx",
+]
 # Only these sources can give Spinther orders. Keep this to your own mic — a
 # voice on a Zoom call or in a YouTube video is not you.
 sources = ["mic"]

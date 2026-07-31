@@ -4,10 +4,25 @@
 
 import AppKit
 import Darwin
-import UserNotifications
 
-let exeURL = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-let awareRoot = exeURL.deletingLastPathComponent().deletingLastPathComponent()
+// Find the Aware project root by walking UP from the executable until we see
+// its fingerprint. Never count directory levels: the binary lives at
+// widget/AwareBar when bare and widget/Aware.app/Contents/MacOS/AwareBar when
+// bundled, and a wrong root silently points every file read at nothing.
+let awareRoot: URL = {
+    var dir = URL(fileURLWithPath: CommandLine.arguments[0])
+        .resolvingSymlinksInPath()
+        .deletingLastPathComponent()
+    for _ in 0..<8 {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: dir.appendingPathComponent("config.toml").path),
+           fm.fileExists(atPath: dir.appendingPathComponent("bin/aware").path) {
+            return dir
+        }
+        dir = dir.deletingLastPathComponent()
+    }
+    return URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("aware")
+}()
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
@@ -74,8 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return days * 86400 + secs
     }
 
-    /// Audio is provably flowing when the live chunk was written recently.
-    private func captureAlive(window: TimeInterval = 45) -> Bool {
+    /// Audio is provably flowing when a chunk was written recently — or when
+    /// words landed recently. The window is generous on purpose: chunk
+    /// rollover, whisper runtime, and post-transcription cleanup leave normal
+    /// gaps, and a warning that cries wolf is worse than no warning at all.
+    private func captureAlive(window: TimeInterval = 150) -> Bool {
+        if heardRecently(window: window) { return true }
         let dir = awareRoot.appendingPathComponent("chunks")
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: [.contentModificationDateKey])
@@ -137,8 +156,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ note: Notification) {
-        UNUserNotificationCenter.current()
-            .requestAuthorization(options: [.alert, .sound]) { _, _ in }
         if let size = try? FileManager.default
             .attributesOfItem(atPath: notifyQueue.path)[.size] as? UInt64 {
             notifyOffset = size
@@ -170,23 +187,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     as? [String: Any],
                   let message = json["message"] as? String else { continue }
             let title = (json["title"] as? String) ?? "Aware"
-            // Try the real Notification Center; if macOS hasn't authorized
-            // this locally-built app (the common case), show our own card so
-            // the message NEVER silently disappears.
-            UNUserNotificationCenter.current().getNotificationSettings { settings in
-                if settings.authorizationStatus == .authorized {
-                    let content = UNMutableNotificationContent()
-                    content.title = title
-                    content.body = message
-                    content.sound = .default
-                    UNUserNotificationCenter.current().add(UNNotificationRequest(
-                        identifier: UUID().uuidString, content: content, trigger: nil))
-                } else {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.showCard(title: title, message: message)
-                    }
-                }
-            }
+            // Our own card, unconditionally. macOS will not register
+            // Notification Center for a locally-built app, and a message
+            // Tim never sees is the same as no message at all.
+            showCard(title: title, message: message)
         }
     }
 
@@ -264,35 +268,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private enum OrbState { case off, blocked, hearing, quiet }
 
+    // A transient gap must not flash red: the fault has to persist.
+    private var unhealthySince: Date?
+
     private func orbState() -> OrbState {
-        guard let pid = daemonPid else { return .off }
-        if micError != nil { return .blocked }
-        if daemonUptimeSeconds(pid) > 60 && !captureAlive() { return .blocked }
+        guard let pid = daemonPid else { unhealthySince = nil; return .off }
+        let unhealthy = micError != nil
+            || (daemonUptimeSeconds(pid) > 180 && !captureAlive())
+        if unhealthy {
+            let since = unhealthySince ?? Date()
+            unhealthySince = since
+            if Date().timeIntervalSince(since) > 90 { return .blocked }
+        } else {
+            unhealthySince = nil
+        }
         return heardRecently() ? .hearing : .quiet
     }
 
     func refreshIcon() {
         guard let button = statusItem.button else { return }
         let state = orbState()
-        // dim = off · red = says ON but audio is NOT flowing · ember = "I hear
-        // you" · normal = listening, quiet room.
-        let color: NSColor
-        let tip: String
+        // Distinct SYMBOL per state, not just a tint — a color shift on the
+        // menu bar is too easy to miss.
+        let symbol: String, color: NSColor, tip: String
         switch state {
-        case .off:     color = .tertiaryLabelColor; tip = "Aware is off — mic released"
-        case .blocked: color = .systemRed
-                       tip = micError ?? "Listening but no audio flowing — check mic/permission"
-        case .hearing: color = .systemOrange;       tip = "Aware hears you"
-        case .quiet:   color = .controlTextColor;   tip = "Aware is listening (quiet)"
+        case .off:
+            symbol = "bolt.slash"; color = .tertiaryLabelColor
+            tip = "Aware is off — mic released"
+        case .blocked:
+            symbol = "exclamationmark.triangle.fill"; color = .systemRed
+            tip = micError ?? "Listening but no audio flowing — check mic/permission"
+        case .hearing:
+            symbol = "waveform"; color = .systemOrange
+            tip = "Aware hears you"
+        case .quiet:
+            symbol = "bolt"; color = .controlTextColor
+            tip = "Aware is listening (quiet room)"
         }
-        // U+FE0E forces the text glyph so the color actually applies.
-        button.attributedTitle = NSAttributedString(
-            string: "⚡\u{FE0E}",
-            attributes: [
-                .foregroundColor: color,
-                .font: NSFont.systemFont(ofSize: 15,
-                                         weight: state == .hearing ? .bold : .medium),
-            ])
+        if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip) {
+            let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+                .applying(.init(paletteColors: [color]))
+            button.image = image.withSymbolConfiguration(config)
+            button.attributedTitle = NSAttributedString(string: "")
+        } else {  // symbol unavailable: fall back to a glyph
+            button.image = nil
+            button.attributedTitle = NSAttributedString(
+                string: state == .hearing ? "◉\u{FE0E}" : "⚡\u{FE0E}",
+                attributes: [.foregroundColor: color,
+                             .font: NSFont.systemFont(ofSize: 15, weight: .medium)])
+        }
         button.toolTip = tip
     }
 
@@ -342,7 +366,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               let heard = json["text"] as? String, let ts = json["ts"] as? String
         else { return nil }
         let time = ts.count >= 16 ? String(ts.dropFirst(11).prefix(5)) : ""
-        return "\(time): \(heard.prefix(46))\(heard.count > 46 ? "…" : "")"
+        var ago = ""
+        if let end = (json["end"] ?? json["ts"]) as? String {
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            if let when = df.date(from: end) {
+                let secs = Int(Date().timeIntervalSince(when))
+                ago = secs < 90 ? " (\(secs)s ago)"
+                    : (secs < 5400 ? " (\(secs / 60)m ago)" : "")
+            }
+        }
+        return "\(time)\(ago): \(heard.prefix(44))\(heard.count > 44 ? "…" : "")"
     }
 
     private func lastNotification() -> String? {

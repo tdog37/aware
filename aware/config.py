@@ -42,7 +42,13 @@ DEFAULTS = {
         "notify": True,
     },
     "wake": {
-        "phrases": ["hey spinther", "hey aware", "hey claude"],
+        # Speech recognition mangles unusual names — "Spinther" comes back as
+        # Spencer, Splinter, Spinner… so the mind answers to all of them.
+        "phrases": [
+            "hey spinther", "hey aware", "hey claude",
+            "hey spencer", "hey splinter", "hey spinner", "hey spinter",
+            "hey spinther", "hey spin there", "hey spender", "hey sphinx",
+        ],
         "sources": ["mic"],  # only these sources can issue wake commands
     },
 }
