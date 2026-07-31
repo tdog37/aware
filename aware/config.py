@@ -26,6 +26,11 @@ DEFAULTS = {
     "activity": {
         "enabled": True,
         "interval_seconds": 15,
+        "window_titles": True,  # needs macOS Accessibility permission
+    },
+    "briefing": {
+        "enabled": True,
+        "at": "08:30",  # local time, 24h — "" disables
     },
     "brain": {
         "persona": "Spinther",  # the mind's name — yours to change

@@ -29,6 +29,16 @@ min_rms = 60
 # The Eyes: log which app is frontmost so Spinther knows what you're working on.
 enabled = true
 interval_seconds = 15
+# Also capture the window title ("S03E04_rough.prproj" beats "Premiere Pro").
+# Needs macOS Accessibility permission — System Settings → Privacy & Security
+# → Accessibility. Without it, Aware quietly falls back to app names only.
+window_titles = true
+
+[briefing]
+# Once a day, Spinther speaks first: what's on your calendar, what's unread,
+# what it noticed yesterday that still matters. Set at = "" to turn off.
+enabled = true
+at = "08:30"
 
 [brain]
 # The mind's name — used in notifications, the widget, and the wake print.

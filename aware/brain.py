@@ -62,6 +62,33 @@ def _memory_tail(cfg, lines: int = 60) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
+def _today_schedule(cfg) -> str:
+    """Calendar sense: the mind should never have to ask what day it is or
+    what's on it. Injected into every wake, cheap and cached by the OS."""
+    script = cfg.home / "bin" / "today-calendar"
+    if not script.exists():
+        return "(no calendar reader installed)"
+    try:
+        out = subprocess.run([str(script)], capture_output=True, text=True,
+                             timeout=30, cwd=str(cfg.home)).stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        return "(calendar unavailable)"
+    return out or "(nothing on the calendar today)"
+
+
+def _dossier_index(cfg) -> str:
+    """One line per dossier so the mind knows what files it already keeps."""
+    d = cfg.memory_dir / "dossiers"
+    if not d.exists():
+        return "(no dossiers yet)"
+    lines = []
+    for p in sorted(d.glob("*.md")):
+        first = next((ln.strip("# ").strip()
+                      for ln in p.read_text().splitlines() if ln.strip()), "")
+        lines.append(f"- {p.stem}: {first[:80]}")
+    return "\n".join(lines) if lines else "(no dossiers yet)"
+
+
 def _playbooks_section(cfg) -> str:
     parts = []
     for p in sorted(cfg.playbooks_dir.glob("*.md")):
@@ -91,10 +118,12 @@ def build_prompt(cfg, reason: str | None = None, entries: list[dict] | None = No
     sections = [
         _read(cfg.home / "prompts" / "brain-system.md"),
         f"## Current time\n{now.strftime('%A, %B %d, %Y — %I:%M %p')}",
+        f"## Today's calendar\n{_today_schedule(cfg)}",
         f"## Why you woke up\n{reason or 'Scheduled heartbeat.'}",
         f"## What Tim is doing on screen (last {window} min)\n{act}",
         f"## Rolling transcript (last {window} min)\n{tx}",
         f"## Your memory (recent observations)\n{_memory_tail(cfg) or '(empty)'}",
+        f"## Dossiers you keep\n{_dossier_index(cfg)}",
         f"## Active playbooks\n{_playbooks_section(cfg)}",
         f"## Proposed playbooks awaiting Tim's approval\n{_proposed_list(cfg)}",
         f"## Brain state\n```json\n{json.dumps(state, indent=2)}\n```",
@@ -265,9 +294,35 @@ def _has_new_speech(cfg) -> bool:
     return last_seen is None or entries[-1]["ts"] > last_seen
 
 
+BRIEFING_REASON = (
+    "MORNING BRIEFING. Tim's day is starting. This is the one wake where you "
+    "speak first and at length. Look at today's calendar, `./bin/recent-mail`, "
+    "your recent observations, and your dossiers, then send ONE briefing that "
+    "earns its place: what's on today, what you noticed yesterday that still "
+    "matters, anything that needs him before it becomes urgent, and where you "
+    "can help. Be specific and useful, not a status report. If there is "
+    "genuinely nothing worth saying, say so in one line."
+)
+
+
+def _briefing_due(cfg) -> bool:
+    at = (cfg.briefing.get("at") or "").strip()
+    if not cfg.briefing.get("enabled", True) or not at:
+        return False
+    try:
+        hh, mm = (int(x) for x in at.split(":", 1))
+    except ValueError:
+        return False
+    now = datetime.now()
+    if (now.hour, now.minute) < (hh, mm):
+        return False
+    return load_state(cfg).get("last_briefing") != now.strftime("%Y-%m-%d")
+
+
 def scheduler(cfg, stop_event, wake_queue: queue.Queue, log=print) -> None:
-    """Heartbeat loop. Runs the brain when there's new speech, or
-    immediately when a wake phrase arrives. Stays quiet otherwise."""
+    """Heartbeat loop. Runs the brain when there's new speech, immediately
+    when a wake phrase arrives, and once a day for the morning briefing.
+    Stays quiet otherwise."""
     interval = cfg.brain["interval_seconds"]
     while not stop_event.is_set():
         reason = None
@@ -278,6 +333,18 @@ def scheduler(cfg, stop_event, wake_queue: queue.Queue, log=print) -> None:
             pass
         if stop_event.is_set():
             return
+
+        # The briefing speaks first — it doesn't wait for Tim to say anything.
+        if reason is None and _briefing_due(cfg):
+            state = load_state(cfg)
+            state["last_briefing"] = datetime.now().strftime("%Y-%m-%d")
+            save_state(cfg, state)
+            try:
+                run_once(cfg, reason=BRIEFING_REASON, log=log)
+            except Exception as e:
+                log(f"[brain] briefing error: {e}")
+            continue
+
         if reason is None and not _has_new_speech(cfg):
             continue
         try:
