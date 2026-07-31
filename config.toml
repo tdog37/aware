@@ -45,7 +45,14 @@ model = "claude-sonnet-5"          # or "claude-haiku-4-5-20251001" for cheaper 
 # playbooks, "acceptEdits" lets it write files (notes, proposals) itself.
 permission_mode = "default"
 timeout_seconds = 300
-extra_args = []
+# The Hands: extra folders the mind may see. .claude/settings.json is the
+# exact permission grant (what it may read, write, run, and search).
+extra_args = ["--add-dir", "/Users/timsafford/Documents/Zoom"]
+# Two-stage brain: a fast cheap model triages every heartbeat wake and only
+# escalates to the big model above when something real is happening.
+# Wake phrases skip triage and go straight to the full mind.
+# Set to "" to disable triage and always use the full model.
+triage_model = "claude-haiku-4-5-20251001"
 # Bring Your Own Brain: leave empty to use the claude settings above, or set
 # a full command (prompt is piped on stdin) to power Spinther with any model:
 #   command = ["codex", "exec"]            # OpenAI, ChatGPT login

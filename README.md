@@ -125,17 +125,31 @@ audio (BlackHole is already installed on this Mac):
 
 Transcript lines are then tagged `mic:` (you) vs `system:` (them).
 
-## Giving Spinther hands
+## The Hands
 
-Spinther runs headless Claude (`claude -p`). Its power = whatever tools that
-CLI has:
+Spinther has hands now, and the grant is a file you can read:
+`.claude/settings.json` says exactly what it may touch. Out of the box:
 
-- `permission_mode = "acceptEdits"` in config.toml lets Spinther write files
-  (meeting notes, session logs) inside this folder.
-- `claude mcp add …` gives Spinther real tools — calendar, Zoom recordings,
-  Slack, Premiere. Note: connectors attached to the claude.ai *app* don't
-  automatically exist for the headless CLI; add them with `claude mcp` so
-  Spinther has them too.
+- **See recordings** — read access to `~/Documents/Zoom` (via `--add-dir`
+  in config.toml) plus `ls`/`stat`/`du`/`find`, so "the interview wrapped
+  → here's the recording, 601 MB" is a real capability, field-tested.
+- **Write its own artifacts** — meeting notes to `transcripts/notes/`,
+  observations to `memory/`, playbook proposals to `playbooks/proposed/`.
+  Nothing else in the repo is writable; the code and constitution are
+  explicitly denied.
+- **Research** — WebSearch/WebFetch when a request or playbook calls for it.
+- **Your MCP tools** — anything added with `claude mcp add` (calendar,
+  Slack, Premiere, your own dashboards) is available to Spinther on its
+  next wake. Note: connectors attached to the claude.ai *app* don't
+  automatically exist for the headless CLI — add them with `claude mcp`.
+
+## The two-stage brain
+
+Every heartbeat wake is first judged by a fast, cheap model
+(`triage_model`, Haiku by default): *is this real life, or just the TV?*
+Only real life escalates to the full model. Wake phrases skip triage and
+go straight to the full mind. Ambient-media days stop costing full-model
+money; set `triage_model = ""` to disable.
 
 ## Bring your own brain
 
@@ -211,14 +225,13 @@ Remove with `launchctl unload ~/Library/LaunchAgents/com.aware.spinther.plist`.
    new, and talk back from a popover.
 2. **Deeper eyes** — window titles, open documents, periodic screen OCR;
    "Tim is editing *S03E04_rough.prproj*" instead of just "Premiere".
-3. **Real hands** — wire Spinther's CLI to the Zoom, Calendar, Otter, Slack and
-   Premiere MCPs so playbooks like *interview-wrap* can actually fetch the
-   recording and build the Premiere project.
+3. ~~**Real hands**~~ — **shipped** for local files + web + CLI MCPs (see
+   "The Hands"). Next: Calendar, Slack, and Premiere MCPs wired in, so
+   *interview-wrap* can build the Premiere project itself.
 4. **Calendar sense** — feed today's events into every brain prompt, so
    "the 2pm with Sarah" is something Spinther just knows.
 5. **Speaker separation** — diarization, so transcripts say who said what.
-6. **Two-stage brain** — a cheap fast model triages every wakeup; the big
-   model only spins up when something's actually happening.
+6. ~~**Two-stage brain**~~ — **shipped** (see "The two-stage brain").
 7. **Spinther everywhere** — companion capture on your other devices feeding
    the same transcript and memory, so Spinther's awareness follows you. The
    rule that keeps this honest: Spinther knows only what you've explicitly

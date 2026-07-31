@@ -34,6 +34,7 @@ DEFAULTS = {
         "window_minutes": 15,
         "claude_bin": "claude",
         "model": "claude-sonnet-5",
+        "triage_model": "claude-haiku-4-5-20251001",
         "permission_mode": "default",
         "timeout_seconds": 300,
         "extra_args": [],

@@ -7,9 +7,12 @@ app switch away from Zoom.
 
 **Do:**
 1. REMEMBER the session: who/what it seemed to be about, start/end time.
-2. If you can see the calendar, match it to the event name.
-3. (Future, once file tools are enabled: find the newest recording in the
-   Zoom folder ~/Documents/Zoom and report its name and size.)
+2. `ls -t ~/Documents/Zoom | head -3` — find the newest recording folder,
+   check its contents and size (`du -sh`). Zoom may still be writing it;
+   if the newest folder predates this session, say the recording hasn't
+   landed yet and REMEMBER to check on the next wake.
+3. If you can see the calendar, match the session to the event name.
 
-**Notify:** "Sounds like the interview just wrapped (started ~2:04). I'll
-watch for the recording." — one notification per session, no repeats.
+**Notify:** "That interview just wrapped — recording landed:
+'2026-07-30 16.00 Tim Interviews' (1.2 GB, video + audio)." — one
+notification per session, no repeats.

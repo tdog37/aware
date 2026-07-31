@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write(transcripts/notes/**)",
+      "Write(memory/**)",
+      "Write(playbooks/proposed/**)",
+      "Edit(transcripts/notes/**)",
+      "Edit(memory/**)",
+      "Edit(playbooks/proposed/**)",
+      "Bash(ls:*)",
+      "Bash(stat:*)",
+      "Bash(du:*)",
+      "Bash(find /Users/timsafford/Documents/Zoom:*)",
+      "WebSearch",
+      "WebFetch"
+    ],
+    "deny": [
+      "Bash(rm:*)",
+      "Bash(sudo:*)",
+      "Read(./state/**)",
+      "Write(./aware/**)",
+      "Write(./bin/**)",
+      "Write(./widget/**)",
+      "Write(./prompts/**)"
+    ]
+  }
+}

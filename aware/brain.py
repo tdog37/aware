@@ -133,7 +133,8 @@ def _handle_output(cfg, output: str, log=print) -> None:
                         f"New playbook proposed: {dest.stem} — review with `aware proposals`")
 
     for line in output.splitlines():
-        line = line.strip()
+        # Models decorate protocol lines ("**NOTIFY: …**") — normalize first.
+        line = line.strip().lstrip("#*_ ").rstrip("*_ ").strip()
         if line.startswith("NOTIFY:"):
             msg = line[len("NOTIFY:"):].strip()
             if msg:
@@ -210,6 +211,52 @@ def run_once(cfg, reason: str | None = None, dry_run: bool = False, log=print) -
     return output
 
 
+TRIAGE_PROMPT = """You are the fast triage stage of Aware, an ambient assistant on
+Tim's Mac. Below is what was heard in the room (and seen on screen) recently.
+Decide whether the full mind — expensive, thorough — should wake to look at it.
+
+ESCALATE for: anyone addressing the assistant directly; a real two-way
+conversation or meeting between people who are present; an event a playbook
+covers (an interview or recording session wrapping up, a meeting ending);
+anything clearly actionable for Tim.
+
+SKIP for: TV, movies, YouTube, music, ads, podcasts, or game audio; fragments
+and background chatter; Tim talking to himself with nothing actionable;
+anything that is plainly just media playing in the room.
+
+Reply with EXACTLY one line, nothing else:
+ESCALATE: <one short reason>
+or
+SKIP: <one short reason>
+"""
+
+
+def triage(cfg, entries: list[dict]) -> tuple[bool, str]:
+    """Cheap first-stage look. Returns (should_wake_full_mind, reason).
+    Fails open — a broken triage must never make Aware miss real life."""
+    bcfg = cfg.brain
+    model = bcfg.get("triage_model") or ""
+    if not model:
+        return True, "triage disabled"
+    acts = activity.read_window(cfg.context_dir, bcfg["window_minutes"])
+    prompt = (
+        TRIAGE_PROMPT
+        + "\n## Heard\n" + (transcript.render(entries) or "(nothing)")
+        + "\n\n## On screen\n" + (activity.render(acts) or "(no app switches)")
+    )
+    cmd = [bcfg["claude_bin"], "-p", "--model", model]
+    try:
+        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                              timeout=120, cwd=str(cfg.home))
+        lines = [ln for ln in (proc.stdout or "").strip().splitlines() if ln.strip()]
+        verdict = lines[-1].strip() if lines else ""
+    except (subprocess.TimeoutExpired, OSError):
+        return True, "triage failed -> escalating"
+    if verdict.upper().startswith("SKIP"):
+        return False, verdict
+    return True, verdict or "empty triage reply -> escalating"
+
+
 def _has_new_speech(cfg) -> bool:
     entries = transcript.read_window(cfg.transcripts_dir, cfg.brain["window_minutes"])
     if not entries:
@@ -234,6 +281,24 @@ def scheduler(cfg, stop_event, wake_queue: queue.Queue, log=print) -> None:
         if reason is None and not _has_new_speech(cfg):
             continue
         try:
+            if reason is None:  # heartbeat: cheap mind decides first
+                entries = transcript.read_window(
+                    cfg.transcripts_dir, cfg.brain["window_minutes"])
+                go, why = triage(cfg, entries)
+                log(f"[brain] triage: {why}")
+                with _log_path(cfg).open("a") as f:
+                    f.write(f"{datetime.now().isoformat(timespec='seconds')} "
+                            f"triage: {why}\n")
+                if not go:
+                    # Mark this speech as seen so the same TV scene doesn't
+                    # get re-triaged every heartbeat forever.
+                    state = load_state(cfg)
+                    if entries:
+                        state["last_transcript_ts"] = entries[-1]["ts"]
+                    state["triage_skips"] = state.get("triage_skips", 0) + 1
+                    save_state(cfg, state)
+                    continue
+                reason = f"Triage escalated — {why}"
             run_once(cfg, reason=reason, log=log)
         except Exception as e:  # never let the brain kill the daemon
             log(f"[brain] error: {e}")
