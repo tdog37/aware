@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sw_vers)",
+      "Bash(system_profiler SPAudioDataType)",
+      "Bash(brew install *)",
+      "Bash(curl -sL -o /Users/timsafford/aware/models/ggml-base.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin)",
+      "Bash(git init *)"
+    ]
+  }
+}

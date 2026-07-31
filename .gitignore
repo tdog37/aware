@@ -1,0 +1,13 @@
+# Everything Aware hears, sees, and remembers stays local and out of git.
+chunks/
+transcripts/
+context/
+logs/
+state/
+audio/
+models/
+memory/observations.md
+playbooks/proposed/
+__pycache__/
+*.pyc
+.DS_Store

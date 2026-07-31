@@ -1,0 +1,58 @@
+# Aware configuration. Every value here has a sane default — delete a line
+# to fall back to it. Paths are relative to this folder.
+
+[audio]
+# Which ears are on. "mic" = your microphone. Add "system" to also hear
+# computer audio (Zoom callers, playback) — routes through BlackHole; see
+# README "Hearing the other side of the call".
+sources = ["mic"]
+mic_device = "HyperX QuadCast S"
+system_device = "BlackHole 2ch"
+chunk_seconds = 30
+# Privacy default: audio is deleted the moment it's transcribed.
+# Aware keeps words, not recordings. Set true to archive WAVs to audio/.
+keep_audio = false
+
+[transcribe]
+whisper_bin = "whisper-cli"
+# base.en = fast. For higher accuracy download ggml-small.en.bin into
+# models/ and point this at it.
+model = "models/ggml-base.en.bin"
+language = "en"
+# Chunks quieter than this RMS (0-32767) are treated as silence and skipped.
+min_rms = 120
+
+[activity]
+# The Eyes: log which app is frontmost so Spark knows what you're working on.
+enabled = true
+interval_seconds = 15
+
+[brain]
+enabled = true
+# Heartbeat. Spark only actually runs when there's NEW speech since last
+# time, so quiet rooms cost nothing.
+interval_seconds = 120
+# How much recent context Spark sees each time it wakes.
+window_minutes = 15
+claude_bin = "claude"
+model = "claude-sonnet-5"          # or "claude-haiku-4-5-20251001" for cheaper triage
+# "default" = Spark can look but mostly not touch. Once you trust your
+# playbooks, "acceptEdits" lets it write files (notes, proposals) itself.
+permission_mode = "default"
+timeout_seconds = 300
+extra_args = []
+# Bring Your Own Brain: leave empty to use the claude settings above, or set
+# a full command (prompt is piped on stdin) to power Spark with any model:
+#   command = ["codex", "exec"]            # OpenAI, ChatGPT login
+#   command = ["gemini", "-p"]             # Google login
+#   command = ["ollama", "run", "llama3"]  # fully local, no cloud at all
+command = []
+notify = true
+
+[wake]
+# Say any of these out loud and Spark wakes instantly, treating the line as
+# a direct instruction.
+phrases = ["hey spark", "hey aware", "hey claude"]
+# Only these sources can give Spark orders. Keep this to your own mic — a
+# voice on a Zoom call or in a YouTube video is not you.
+sources = ["mic"]

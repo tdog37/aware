@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.aware.spark</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/timsafford/aware/bin/aware</string>
+        <string>start</string>
+    </array>
+    <!-- launchd's default PATH has no Homebrew and no nvm — without this,
+         python3 is Apple's ancient one and ffmpeg/whisper-cli/claude are
+         unfindable, and the agent crash-loops. Adjust the nvm path if your
+         node version changes. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/Users/timsafford/.nvm/versions/node/v23.6.1/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>StandardOutPath</key>
+    <string>/Users/timsafford/aware/logs/daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/timsafford/aware/logs/daemon.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Aware launcher — runs the aware package with the project root on PYTHONPATH.
+# Homebrew's bin is prepended so the right python3/ffmpeg/whisper-cli are
+# found even in bare environments (launchd runs with a minimal PATH).
+AWARE_HOME="$(cd "$(dirname "$0")/.." && pwd)"
+[ -d /opt/homebrew/bin ] && PATH="/opt/homebrew/bin:$PATH"
+export PATH
+export PYTHONPATH="$AWARE_HOME"
+exec python3 -m aware "$@"
